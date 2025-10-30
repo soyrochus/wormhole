@@ -1,0 +1,12 @@
+[project]
+name = "wormhole"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "python-docx>=0.8.11",
+    "python-pptx>=0.6.21",
+    "openai>=1.0.0",
+    "python-dotenv>=1.0.0",
+]

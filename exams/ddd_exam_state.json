@@ -1,0 +1,87 @@
+{
+  "exam_id": "default-5",
+  "version": 2,
+  "total_questions": 5,
+  "question_number": 5,
+  "score": 5,
+  "seed": 525253,
+  "questions": [
+    {
+      "id": "q1",
+      "topic": "Aggregates & invariants",
+      "context": "A Payment is applied to an Order with many charges and discounts.",
+      "stem": "Where must the rule \"total paid cannot exceed order total\" be enforced transactionally?",
+      "options": [
+        "In a database trigger after inserting a payment",
+        "In a nightly job that fixes overpayments",
+        "Inside the Order aggregate root when applying a payment",
+        "In the REST controller that validates the amount"
+      ],
+      "answer_key": "C",
+      "rationale": "Aggregate roots guard invariants at command time inside their boundary. UI, triggers, or batches are not authoritative for enforcing domain rules and can be bypassed or race-prone. Evans emphasizes aggregates as consistency boundaries."
+    },
+    {
+      "id": "q2",
+      "topic": "Entities vs Value Objects",
+      "context": "Money has amount and currency and is copied, not tracked.",
+      "stem": "What should Money be in DDD?",
+      "options": [
+        "An Entity with an identity that never changes",
+        "A Value Object that is immutable and compared by its fields",
+        "An Aggregate root that stores balances",
+        "A Domain Service that converts currencies"
+      ],
+      "answer_key": "B",
+      "rationale": "Value Objects capture concepts defined by their attributes and are immutable; equality is by value. Evans shows examples like Money as classic Value Objects to keep models simple and side-effect free. Entities are for things tracked by identity across time."
+    },
+    {
+      "id": "q3",
+      "topic": "Bounded Contexts & Context Maps",
+      "context": "Sales and Support both use \"Customer\" but mean different things.",
+      "stem": "How do you avoid mixing their models?",
+      "options": [
+        "Share one Customer class and database table",
+        "Build a Context Map and keep separate models per bounded context",
+        "Add all fields into one big Customer and hide via UI",
+        "Enforce a global schema from the database"
+      ],
+      "answer_key": "B",
+      "rationale": "Bounded Contexts allow different models to live side-by-side without collision. A Context Map makes the seams explicit; sharing classes or schemas forces accidental coupling and corrupts the Ubiquitous Language."
+    },
+    {
+      "id": "q4",
+      "topic": "ACL / Shared Kernel / Conformist / Partnership",
+      "context": "Payments must call a legacy Billing API with different terms.",
+      "stem": "How should Payments integrate without model leakage?",
+      "options": [
+        "Anti-Corruption Layer translating to Payments' model",
+        "Conformist: adopt the Billing objects directly",
+        "Shared Kernel to reuse Billing's types",
+        "Partnership that merges both models into one"
+      ],
+      "answer_key": "A",
+      "rationale": "An Anti-Corruption Layer protects the core model by translating to and from the external system. Conformist and Shared Kernel increase coupling to a messy model; Partnership changes organization, not the translation need."
+    },
+    {
+      "id": "q5",
+      "topic": "Domain Events & eventual consistency",
+      "context": "When an Order is placed, Inventory in another context must reserve stock.",
+      "stem": "How should they coordinate?",
+      "options": [
+        "Use a distributed transaction across both contexts",
+        "Publish an OrderPlaced domain event and handle it asynchronously with retries",
+        "Update Inventory in the same DB transaction",
+        "Let the UI call both services in sequence"
+      ],
+      "answer_key": "B",
+      "rationale": "Cross-context workflows favor domain events and eventual consistency rather than tight, distributed transactions. Evans promotes decoupling contexts and using reliable messaging patterns to propagate changes."
+    }
+  ],
+  "answers": [
+    { "id": "q1", "user": "C", "correct": true, "timestamp": "2025-10-28T00:00:00Z" },
+    { "id": "q2", "user": "B", "correct": true, "timestamp": "2025-10-28T00:01:00Z" },
+    { "id": "q3", "user": "B", "correct": true, "timestamp": "2025-10-28T00:02:00Z" },
+    { "id": "q4", "user": "A", "correct": true, "timestamp": "2025-10-28T00:03:00Z" },
+    { "id": "q5", "user": "B", "correct": true, "timestamp": "2025-10-28T00:04:00Z" }
+  ]
+}
