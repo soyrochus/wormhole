@@ -70,6 +70,34 @@ uv run main.py devloop.pptx --target-language en
 
 During execution Wormhole prints progress (and, optionally, provider debug output) and writes a summary that includes translated units, skipped elements, batch counts, and elapsed time. The original document remains untouched; the translated file is written to the path you specified or, by default, a sibling file suffixed with the sanitized target language.
 
+### Launcher scripts (Bash and PowerShell)
+
+If you prefer a one-command launcher that manages the uv environment for you, use the included wrappers:
+
+macOS/Linux (Bash/zsh):
+
+```bash
+./wormhole.sh --help
+./wormhole.sh input.docx -t ES -s EN -o output_es.docx -v
+```
+
+Windows or PowerShell Core:
+
+```powershell
+./wormhole.ps1 --help
+./wormhole.ps1 input.pptx -t EN -s ES -o output_en.pptx -v
+```
+
+Both launchers:
+
+- Run `uv sync` automatically (set `UV_SYNC=0` to skip)
+- Forward all CLI arguments to the module (`wormhole.cli`)
+- Accept extra uv options via `UV_ARGS` (for example to pin Python):
+
+```bash
+UV_ARGS="--python 3.11" ./wormhole.sh --version
+```
+
 ## Command-Line Reference
 
 | Option | Description | Notes |
