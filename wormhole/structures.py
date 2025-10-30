@@ -18,6 +18,7 @@ class TextUnit:
     setter: TextSetter
     location: str
     segments: List["TextSegment"] = field(default_factory=list)
+    atomic: bool = False
 
 
 @dataclass

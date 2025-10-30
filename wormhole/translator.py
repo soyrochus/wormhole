@@ -56,6 +56,7 @@ class TranslationRunner:
         batch_budget: int,
         interactive: bool,
         verbose: bool,
+        provider_debug: bool,
     ) -> None:
         self.input_path = input_path
         self.output_path = output_path
@@ -66,6 +67,7 @@ class TranslationRunner:
         self.batch_budget = batch_budget
         self.interactive = interactive
         self.verbose = verbose
+        self.provider_debug = provider_debug
 
         self.error_policy = ErrorPolicy(interactive=interactive)
         self.max_retries = 3
@@ -88,7 +90,7 @@ class TranslationRunner:
                 f"{len(segments)} segments, {len(batches)} batches."
             )
 
-        provider = build_provider(self.provider_name)
+        provider = build_provider(self.provider_name, debug=self.provider_debug)
 
         buffers: Dict[str, List[str | None]] = {
             unit.unit_id: [None] * len(unit.segments) for unit in units

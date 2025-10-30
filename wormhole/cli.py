@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import re
 import sys
@@ -82,6 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show detailed progress information.",
     )
+    parser.add_argument(
+        "--debug-provider",
+        action="store_true",
+        help="Log complete provider requests and responses for troubleshooting.",
+    )
     return parser
 
 
@@ -100,6 +106,17 @@ def derive_output_path(input_path: pathlib.Path, language: str) -> pathlib.Path:
     addition = sanitise_language_for_filename(language)
     candidate = f"{stem}_{addition}{suffix}"
     return input_path.with_name(candidate)
+
+
+def _env_flag(*names: str) -> bool:
+    """Interpret boolean-like environment variables."""
+
+    truthy = {"1", "true", "yes", "on"}
+    for name in names:
+        value = os.getenv(name)
+        if value is not None and value.strip().lower() in truthy:
+            return True
+    return False
 
 
 def print_summary(summary: TranslationSummary) -> None:
@@ -143,6 +160,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         if args.output
         else derive_output_path(input_path, args.target_language)
     )
+    provider_debug = bool(
+        args.debug_provider
+        or _env_flag("WORMHOLE_PROVIDER_DEBUG", "WORMHOLE_DEBUG_PROVIDER")
+    )
 
     try:
         validate_paths(input_path, output_path, force_overwrite=args.force)
@@ -168,6 +189,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         batch_budget=args.batch_guidance,
         interactive=not args.non_interactive,
         verbose=args.verbose,
+        provider_debug=provider_debug,
     )
 
     try:
@@ -191,6 +213,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         print("Translation interrupted by user.")
         return 2
     except Exception as exc:  # pragma: no cover - defensive catch
+        print(exc)
         print(
             "An unexpected error occurred. Please rerun with --verbose for more details."
         )

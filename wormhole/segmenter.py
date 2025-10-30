@@ -186,11 +186,16 @@ class Segmenter:
     def segment_units(self, units: Sequence[TextUnit]) -> List[TextSegment]:
         segments: List[TextSegment] = []
         for unit in units:
-            unit_segments = segment_text(unit.original_text, self.budget)
-            if not unit_segments:
+            if unit.atomic:
+                raw_segments = (
+                    [unit.original_text] if unit.original_text else []
+                )
+            else:
+                raw_segments = segment_text(unit.original_text, self.budget)
+            if not raw_segments:
                 continue
-            mapped: List[TextSegment] = []
-            for idx, content in enumerate(unit_segments):
+            unit.segments = []
+            for idx, content in enumerate(raw_segments):
                 segment = TextSegment(
                     segment_id=f"{unit.unit_id}#seg{idx}",
                     unit_id=unit.unit_id,
@@ -198,8 +203,7 @@ class Segmenter:
                     order=idx,
                 )
                 segments.append(segment)
-                mapped.append(segment)
-            unit.segments = mapped
+                unit.segments.append(segment)
         return segments
 
 

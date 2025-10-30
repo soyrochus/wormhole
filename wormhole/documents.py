@@ -2,12 +2,126 @@
 
 from __future__ import annotations
 
+import html
 import pathlib
+import re
 from abc import ABC, abstractmethod
-from typing import Iterable, List, Tuple
+from typing import Dict, Iterable, List, Sequence, Tuple
 
 from .errors import UnsupportedFileTypeError, WormholeError
-from .structures import TextSegment, TextUnit
+from .structures import TextUnit
+
+
+RUN_TAG_PATTERN = re.compile(
+    r"<run\s+id=\"(?P<id>[^\"]+)\">(?P<content>.*?)</run>",
+    re.DOTALL,
+)
+
+
+def _parse_tagged_translation(
+    translated: str,
+    expected_ids: Sequence[str],
+) -> Dict[str, str]:
+    """Parse `<run id="">` tagged content and map ids to translated text."""
+
+    mapping: Dict[str, str] = {}
+    cursor = 0
+    for match in RUN_TAG_PATTERN.finditer(translated):
+        prefix = translated[cursor:match.start()]
+        if prefix.strip():
+            raise WormholeError(
+                "Translated output contained unexpected content outside <run> tags."
+            )
+        run_id = match.group("id")
+        if run_id not in expected_ids:
+            raise WormholeError(
+                f"Translated output contained an unknown run id '{run_id}'."
+            )
+        if run_id in mapping:
+            raise WormholeError(
+                f"Translated output duplicated run id '{run_id}'."
+            )
+        content = html.unescape(match.group("content"))
+        mapping[run_id] = content
+        cursor = match.end()
+
+    suffix = translated[cursor:]
+    if suffix.strip():
+        raise WormholeError(
+            "Translated output contained unexpected trailing content outside <run> tags."
+        )
+
+    if len(mapping) != len(expected_ids):
+        missing = [run_id for run_id in expected_ids if run_id not in mapping]
+        raise WormholeError(
+            "Translation output missing expected runs: "
+            + ", ".join(missing)
+        )
+
+    return mapping
+
+
+def _build_units_from_runs(
+    runs,
+    *,
+    unit_prefix: str,
+    location: str,
+) -> List[TextUnit]:
+    """Aggregate paragraph runs into a single translation unit."""
+
+    fragments: List[Tuple[str, object, str]] = []
+    for r_idx, run in enumerate(runs):
+        text = getattr(run, "text", "")
+        if text is None:
+            continue
+        if not text or not text.strip():
+            continue
+        fragment_id = f"{unit_prefix}.r{r_idx}"
+        fragments.append((fragment_id, run, text))
+
+    if not fragments:
+        return []
+
+    if len(fragments) == 1:
+        fragment_id, run, text = fragments[0]
+
+        def _single_setter(translated: str) -> None:
+            setattr(run, "text", translated)
+
+        return [
+            TextUnit(
+                unit_id=fragment_id,
+                original_text=text,
+                setter=_single_setter,
+                location=location,
+                atomic=False,
+            )
+        ]
+
+    parts = [
+        f'<run id="{fragment_id}">{html.escape(text, quote=False)}</run>'
+        for fragment_id, _, text in fragments
+    ]
+    original_text = "".join(parts)
+
+    fragment_ids = [fragment_id for fragment_id, _, _ in fragments]
+    setters = {fragment_id: run for fragment_id, run, _ in fragments}
+
+    def _setter(translated: str) -> None:
+        mapping = _parse_tagged_translation(translated, fragment_ids)
+        for fragment_id in fragment_ids:
+            run = setters[fragment_id]
+            new_text = mapping[fragment_id]
+            setattr(run, "text", new_text)
+
+    unit = TextUnit(
+        unit_id=unit_prefix,
+        original_text=original_text,
+        setter=_setter,
+        location=location,
+        atomic=True,
+    )
+    return [unit]
 
 
 def _import_docx():
@@ -159,21 +273,11 @@ class DocxDocumentHandler(BaseDocumentHandler):
         unit_prefix: str,
         location: str,
     ) -> List[TextUnit]:
-        units: List[TextUnit] = []
-        for r_idx, run in enumerate(runs):
-            text = run.text
-            if not text or not text.strip():
-                continue
-            unit_id = f"{unit_prefix}.r{r_idx}"
-            units.append(
-                TextUnit(
-                    unit_id=unit_id,
-                    original_text=text,
-                    setter=lambda value, target=run: setattr(target, "text", value),
-                    location=location,
-                )
-            )
-        return units
+        return _build_units_from_runs(
+            runs,
+            unit_prefix=unit_prefix,
+            location=location,
+        )
 
 
 class PptxDocumentHandler(BaseDocumentHandler):
@@ -264,19 +368,14 @@ class PptxDocumentHandler(BaseDocumentHandler):
     ) -> List[TextUnit]:
         units: List[TextUnit] = []
         for p_idx, paragraph in enumerate(text_frame.paragraphs):
-            for r_idx, run in enumerate(paragraph.runs):
-                text = run.text
-                if not text or not text.strip():
-                    continue
-                unit_id = f"{unit_prefix}.p{p_idx}.r{r_idx}"
-                units.append(
-                    TextUnit(
-                        unit_id=unit_id,
-                        original_text=text,
-                        setter=lambda value, target=run: setattr(target, "text", value),
-                        location=location,
-                    )
+            paragraph_prefix = f"{unit_prefix}.p{p_idx}"
+            units.extend(
+                _build_units_from_runs(
+                    paragraph.runs,
+                    unit_prefix=paragraph_prefix,
+                    location=location,
                 )
+            )
         return units
 
     def _extract_table(
