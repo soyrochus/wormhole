@@ -31,12 +31,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "input_file",
+        nargs="?",
         help="Path to the .docx or .pptx file to translate.",
     )
     parser.add_argument(
         "-t",
         "--target-language",
-        required=True,
+        required=False,
         help="Destination language (name or ISO-639 code).",
     )
     parser.add_argument(
@@ -88,6 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Log complete provider requests and responses for troubleshooting.",
     )
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Launch the graphical interface for configuring and running translations.",
+    )
     return parser
 
 
@@ -117,6 +123,77 @@ def _env_flag(*names: str) -> bool:
         if value is not None and value.strip().lower() in truthy:
             return True
     return False
+
+
+def execute_translation(
+    *,
+    input_file: str,
+    output_file: str | None,
+    target_language: str,
+    source_language: str | None,
+    provider: str | None,
+    model: str | None,
+    batch_guidance: int,
+    force_overwrite: bool,
+    non_interactive: bool,
+    verbose: bool,
+    provider_debug: bool,
+) -> tuple[int, TranslationSummary | None, str | None]:
+    """Execute a translation run and return the exit code, summary, and message."""
+
+    input_path = pathlib.Path(input_file).expanduser().resolve()
+    output_path = (
+        pathlib.Path(output_file).expanduser().resolve()
+        if output_file
+        else derive_output_path(input_path, target_language)
+    )
+
+    try:
+        validate_paths(input_path, output_path, force_overwrite=force_overwrite)
+    except FileNotFoundError as exc:
+        return 1, None, str(exc)
+    except OverwriteRefusedError as exc:
+        return 1, None, str(exc)
+    except WormholeError as exc:
+        return 1, None, str(exc)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    runner = TranslationRunner(
+        input_path=input_path,
+        output_path=output_path,
+        target_language=target_language,
+        source_language=source_language,
+        provider_name=provider,
+        model=model,
+        batch_budget=batch_guidance,
+        interactive=not non_interactive,
+        verbose=verbose,
+        provider_debug=provider_debug,
+    )
+
+    try:
+        summary = runner.run()
+    except UnsupportedFileTypeError as exc:
+        return 1, None, str(exc)
+    except TranslationProviderConfigurationError as exc:
+        return 1, None, str(exc)
+    except NonInteractiveAbort as exc:
+        return 2, None, str(exc)
+    except AbortRequested:
+        return 2, None, "Translation aborted at your request."
+    except WormholeError as exc:
+        return 1, None, str(exc)
+    except KeyboardInterrupt:
+        return 2, None, "Translation interrupted by user."
+    except Exception as exc:  # pragma: no cover - defensive catch
+        error_message = (
+            f"{exc}\n"
+            "An unexpected error occurred. Please rerun with --verbose for more details."
+        )
+        return 1, None, error_message
+
+    return 0, summary, None
 
 
 def print_summary(summary: TranslationSummary) -> None:
@@ -154,73 +231,45 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    input_path = pathlib.Path(args.input_file).expanduser().resolve()
-    output_path = (
-        pathlib.Path(args.output).expanduser().resolve()
-        if args.output
-        else derive_output_path(input_path, args.target_language)
-    )
     provider_debug = bool(
         args.debug_provider
         or _env_flag("WORMHOLE_PROVIDER_DEBUG", "WORMHOLE_DEBUG_PROVIDER")
     )
 
-    try:
-        validate_paths(input_path, output_path, force_overwrite=args.force)
-    except FileNotFoundError as exc:
-        print(str(exc))
-        return 1
-    except OverwriteRefusedError as exc:
-        print(str(exc))
-        return 1
-    except WormholeError as exc:
-        print(str(exc))
-        return 1
+    if args.gui:
+        from .gui import launch_gui
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+        return launch_gui(
+            args=args,
+            translation_executor=execute_translation,
+            summary_printer=print_summary,
+            provider_debug=provider_debug,
+        )
 
-    runner = TranslationRunner(
-        input_path=input_path,
-        output_path=output_path,
+    if args.input_file is None:
+        parser.error("the following arguments are required: input_file")
+    if not args.target_language:
+        parser.error("the following arguments are required: -t/--target-language")
+
+    exit_code, summary, message = execute_translation(
+        input_file=args.input_file,
+        output_file=args.output,
         target_language=args.target_language,
         source_language=args.source_language,
-        provider_name=args.provider,
+        provider=args.provider,
         model=args.model,
-        batch_budget=args.batch_guidance,
-        interactive=not args.non_interactive,
+        batch_guidance=args.batch_guidance,
+        force_overwrite=args.force,
+        non_interactive=args.non_interactive,
         verbose=args.verbose,
         provider_debug=provider_debug,
     )
 
-    try:
-        summary = runner.run()
-    except UnsupportedFileTypeError as exc:
-        print(str(exc))
-        return 1
-    except TranslationProviderConfigurationError as exc:
-        print(str(exc))
-        return 1
-    except NonInteractiveAbort as exc:
-        print(str(exc))
-        return 2
-    except AbortRequested:
-        print("Translation aborted at your request.")
-        return 2
-    except WormholeError as exc:
-        print(str(exc))
-        return 1
-    except KeyboardInterrupt:
-        print("Translation interrupted by user.")
-        return 2
-    except Exception as exc:  # pragma: no cover - defensive catch
-        print(exc)
-        print(
-            "An unexpected error occurred. Please rerun with --verbose for more details."
-        )
-        return 1
-
-    print_summary(summary)
-    return 0
+    if message:
+        print(message)
+    if summary:
+        print_summary(summary)
+    return exit_code
 
 
 if __name__ == "__main__":  # pragma: no cover
