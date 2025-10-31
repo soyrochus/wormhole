@@ -130,6 +130,43 @@ UV_ARGS="--python 3.11" ./wormhole.sh --version
 
 The default OpenAI provider reads `OPENAI_API_KEY` from the environment. The adapter can be extended to support alternate providers while keeping the existing CLI contract intact. Provider debugging can be enabled via the `--debug-provider` flag or either `WORMHOLE_PROVIDER_DEBUG=1` or `WORMHOLE_DEBUG_PROVIDER=1` in the environment.
 
+### OpenAI Responses vs Legacy Completions
+
+Wormhole ships with a single OpenAI adapter that understands two transport modes:
+
+- **OpenAI / Azure OpenAI (Responses API)** — the default path, using OpenAI's Responses endpoint (and the Azure equivalent) for JSON-native output.
+- **Legacy OpenAI (Completions API)** — an opt-in fallback for deployments that have not enabled the Responses API yet.
+
+Select the correct backend through environment variables:
+
+- `LLM_PROVIDER=openai` (default) uses `OPENAI_API_KEY`.
+- `LLM_PROVIDER=azure_openai` switches the same adapter to Azure OpenAI; provide:
+  - `AZURE_OPENAI_API_KEY`
+  - `AZURE_OPENAI_ENDPOINT`
+  - `AZURE_OPENAI_API_VERSION`
+  - `AZURE_OPENAI_DEPLOYMENT_NAME`
+  - `AZURE_OPENAI_EMBEDDING_MODEL`
+
+Usage examples:
+
+```bash
+# Responses API with OpenAI (default provider)
+uv run python -m wormhole.cli input.docx -t es
+
+# Responses API with Azure OpenAI
+LLM_PROVIDER=azure_openai \
+AZURE_OPENAI_API_KEY=... \
+AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com \
+AZURE_OPENAI_API_VERSION=2024-12-01-preview \
+AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o \
+uv run python -m wormhole.cli input.docx -t es
+
+# Chat Completions via the legacy adapter
+uv run python -m wormhole.cli input.docx -t es --provider legacy-openai
+```
+
+Choose the legacy adapter only when your account cannot access the Responses API; it emits the same JSON contract but leverages the Chat Completions endpoint behind the scenes.
+
 
 ## Principles of Participation
 

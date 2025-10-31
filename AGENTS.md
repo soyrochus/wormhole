@@ -1,10 +1,17 @@
-Implement an UI with the default Python UI Tkinter, mapping the command line parameters to the UI elemnents.
+Extend the current OpenAI provider so it can also work with Azure OpenAI. So NO need to select a different provider in this case. 
 
-the --verbose and other debug parameters should NOT have a UI equivalent and once activated should prrint to the console and not to the UI
+The determinator to choose either connection to OpenAI or Azure OpenAI should be 
+the env variable LLM_PROVIDER. These could contain the values "openai" or "azure_openai" 
 
-The UI should be started with the --gui paranmeters
+if azure_open_ai then the following  envioronment values should be used
+DO NOT HARD CODE THE EXAMPKE VALUES
 
-Once terminated, the app should show a messagebox with a friendly message.
+AZURE_OPENAI_API_KEY=example-key
+AZURE_OPENAI_ENDPOINT=https://corpus-oai-we-001.openai.azure.com
+AZURE_OPENAI_API_VERSION=2024-12-01-preview
+AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
+AZURE_OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+
 
 
 
