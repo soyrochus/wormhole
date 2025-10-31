@@ -47,20 +47,33 @@ class EchoTranslationProvider(TranslationProvider):
 class OpenAITranslationProvider(TranslationProvider):
     """Translation provider that uses OpenAI chat models."""
 
-    DEFAULT_MODEL = "gpt-5-mini" # "gpt-4o-mini"
+    DEFAULT_MODEL = "gpt-5-mini"  # "gpt-4o-mini"
 
     def __init__(self, *, debug: bool = False) -> None:
         self.debug = debug
-        self._client = self._build_client()
+        provider_value = os.getenv("LLM_PROVIDER", "openai") or "openai"
+        normalized = provider_value.strip().lower()
+        if normalized in {"azure_open_ai", "azure-openai"}:
+            normalized = "azure_openai"
+        if normalized not in {"openai", "azure_openai"}:
+            normalized = "openai"
 
-    def _build_client(self):
+        self.provider_kind = normalized
+        self._client, self._default_model = self._build_client()
+
+    def _build_client(self) -> tuple[Any, str]:
+        if self.provider_kind == "azure_openai":
+            return self._build_azure_client()
+
+        return self._build_openai_client()
+
+    def _build_openai_client(self) -> tuple[Any, str]:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise TranslationProviderConfigurationError(
                 "OpenAI configuration missing. Set OPENAI_API_KEY or choose a "
                 "different provider."
             )
-
         try:
             from openai import OpenAI  # type: ignore
         except ImportError as exc:  # pragma: no cover - import guard
@@ -68,7 +81,44 @@ class OpenAITranslationProvider(TranslationProvider):
                 "OpenAI Python SDK not installed. Install with `pip install openai`."
             ) from exc
 
-        return OpenAI(api_key=api_key)
+        return OpenAI(api_key=api_key), self.DEFAULT_MODEL
+
+    def _build_azure_client(self) -> tuple[Any, str]:
+        api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        api_version = os.getenv("AZURE_OPENAI_API_VERSION")
+        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+
+        missing = [
+            name
+            for name, value in {
+                "AZURE_OPENAI_API_KEY": api_key,
+                "AZURE_OPENAI_ENDPOINT": endpoint,
+                "AZURE_OPENAI_API_VERSION": api_version,
+                "AZURE_OPENAI_DEPLOYMENT_NAME": deployment_name,
+            }.items()
+            if not value
+        ]
+        if missing:
+            raise TranslationProviderConfigurationError(
+                "Azure OpenAI configuration incomplete. Please set: "
+                + ", ".join(missing)
+                + "."
+            )
+
+        try:
+            from openai import AzureOpenAI  # type: ignore
+        except ImportError as exc:  # pragma: no cover - import guard
+            raise TranslationProviderConfigurationError(
+                "OpenAI Python SDK not installed. Install with `pip install openai`."
+            ) from exc
+
+        client = AzureOpenAI(
+            api_key=api_key,
+            api_version=api_version,
+            azure_endpoint=endpoint,
+        )
+        return client, deployment_name  # type: ignore[arg-type]
 
     def translate(
         self,
@@ -108,7 +158,7 @@ class OpenAITranslationProvider(TranslationProvider):
         response_items = self._invoke_model(
             system_prompt=system_prompt,
             user_payload=user_prompt,
-            model=model or self.DEFAULT_MODEL,
+            model=model or self._default_model,
         )
         self._log_debug("provider.response.items", response_items)
 
