@@ -337,12 +337,84 @@ class OpenAITranslationProvider(TranslationProvider):
         )
 
 
+class LegacyOpenAITranslationProvider(OpenAITranslationProvider):
+    """Translation provider that uses the Chat Completions API for compatibility."""
+
+    def _invoke_model(
+        self,
+        *,
+        system_prompt: str,
+        user_payload: dict,
+        model: str,
+    ) -> list[dict[str, Any]]:
+        """Call the Chat Completions API and return structured JSON data."""
+
+        try:
+            response = self._client.chat.completions.create(
+                model=model,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": json.dumps(user_payload, ensure_ascii=False),
+                    },
+                ],
+            )
+        except Exception as exc:  # pragma: no cover - network call
+            raise TranslationProviderError(
+                f"Translation service temporarily unavailable — {exc}"
+            ) from exc
+        self._log_debug("provider.response.raw", self._safe_dump_response(response))
+
+        content: str | None = None
+        choices = getattr(response, "choices", None) or []
+        for choice in choices:
+            message = getattr(choice, "message", None)
+            if message is None:
+                continue
+            message_content = getattr(message, "content", None)
+            if hasattr(message_content, "value"):  # SDK helper attribute
+                message_content = message_content.value
+            if isinstance(message_content, list):
+                parts: list[str] = []
+                for part in message_content:
+                    text_value = getattr(part, "text", None)
+                    if hasattr(text_value, "value"):
+                        text_value = text_value.value
+                    if text_value is None and isinstance(part, dict):
+                        text_value = part.get("text")
+                    if text_value:
+                        parts.append(str(text_value))
+                if parts:
+                    content = "\n".join(parts)
+                    break
+            elif message_content:
+                content = str(message_content)
+                break
+            fallback_text = getattr(choice, "text", None)
+            if fallback_text:
+                content = str(fallback_text)
+                break
+
+        if content is None:
+            raise TranslationProviderError(
+                "Translation provider response empty or unrecognised."
+            )
+
+        content = self._strip_code_fence(content)
+        translations = self._normalise_translations(content)
+        return translations
+
+
 def build_provider(name: str | None, *, debug: bool = False) -> TranslationProvider:
     """Factory to create providers by name."""
 
     normalized = (name or "openai").strip().lower()
     if normalized in {"openai", "gpt", "default"}:
         return OpenAITranslationProvider(debug=debug)
+    if normalized in {"legacy-openai", "legacy_openai", "legacy", "openai-legacy"}:
+        return LegacyOpenAITranslationProvider(debug=debug)
     if normalized in {"echo", "noop", "mock"}:
         return EchoTranslationProvider()
     raise TranslationProviderConfigurationError(
