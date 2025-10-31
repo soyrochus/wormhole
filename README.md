@@ -70,6 +70,10 @@ uv run main.py devloop.pptx --target-language en
 
 During execution Wormhole prints progress (and, optionally, provider debug output) and writes a summary that includes translated units, skipped elements, batch counts, and elapsed time. The original document remains untouched; the translated file is written to the path you specified or, by default, a sibling file suffixed with the sanitized target language.
 
+Prefer a visual workflow? Launch the Tkinter GUI with `./wormhole.sh --gui` on MacOS and Linux or `./wormhole.ps1 --gui` on Windows; the window maps all core CLI options and still streams debug/verbose logs to the terminal.
+
+![WOrmhole Screen shot](./images/wormhole-gui.png)
+
 ### Launcher scripts (Bash and PowerShell)
 
 If you prefer a one-command launcher that manages the uv environment for you, use the included wrappers:
@@ -113,6 +117,7 @@ UV_ARGS="--python 3.11" ./wormhole.sh --version
 | `--non-interactive` | Disable prompts and automatic pauses. | Suitable for CI; still respects error thresholds. |
 | `-v, --verbose` | Print detailed progress information. | Helpful for tracking segmentation and batches. |
 | `--debug-provider` | Log full provider request/response payloads to stderr. | Equivalent env vars: `WORMHOLE_PROVIDER_DEBUG=1` or `WORMHOLE_DEBUG_PROVIDER=1`. |
+| `--gui` | Launch the Tkinter-based configuration window. | Ideal for interactive runs; CLI-only flags such as `--verbose` still print to the console. |
 
 ### Error Handling Notes
 
