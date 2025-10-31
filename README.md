@@ -1,5 +1,14 @@
 # Wormhole Document Translator
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![Python 3.13+](https://img.shields.io/badge/Python-3.13%2B-blue.svg)
+[![Env: uv](https://img.shields.io/badge/Env-uv-8A2BE2.svg)](https://docs.astral.sh/uv/)
+![OS: macOS | Linux | Windows](https://img.shields.io/badge/OS-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)
+[![FOSS Pluralism Manifesto](https://img.shields.io/badge/Manifesto-FOSS%20Pluralism-8A2BE2.svg)](FOSS_PLURALISM_MANIFESTO.md)
+[![Contributions welcome](https://img.shields.io/badge/Contributions-welcome-brightgreen.svg)](https://github.com/soyrochus/wormhole/issues)
+
+![Wormhole icon](images/wormhole-min.png)
+
 Wormhole is a command-line translator that rewrites Word (`.docx`) and PowerPoint (`.pptx`) files into another language while keeping the original layout intact. The tool walks every paragraph, table cell, header, footer, text box, and note, collects their text with deterministic identifiers, batches the content for an LLM, reinserts the translated text in place, and finally saves the result as a new document plus a friendly completion report.
 
 The CLI is designed for teams that want a provider-agnostic workflow: switching to a different LLM requires only a new adapter, not a new command-line contract.
@@ -25,24 +34,29 @@ The CLI is designed for teams that want a provider-agnostic workflow: switching 
    Follow the official uv installation guide: <https://docs.astral.sh/uv/>.
 
 2. **Clone the repository**
+
    ```bash
    git clone https://github.com/your-org/wormhole.git
    cd wormhole
    ```
 
 3. **Sync dependencies with uv**
+   
    ```bash
    uv sync
    ```
+   
    `uv` reads `pyproject.toml` and `uv.lock`, creating an isolated environment pinned to the recorded dependency versions.
 
 4. **Configure credentials**  
    Create a `.env` file or export environment variables so the CLI can load your credentials:
+   
    ```bash
    echo "OPENAI_API_KEY=sk-your-key" >> .env
    # Optional additional flags:
    # echo "WORMHOLE_PROVIDER_DEBUG=1" >> .env
    ```
+   
    `wormhole.cli` calls `load_dotenv()` on startup, so entries in `.env` automatically populate the environment.
 
 ## Usage Overview
