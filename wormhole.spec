@@ -4,9 +4,7 @@ from PyInstaller.utils.hooks import collect_submodules
 block_cipher = None
 entry = 'wormhole/__main__.py'
 
-datas = [
-    ('configs/*.yaml', 'configs'),   # keep/adjust as needed
-]
+datas = []
 
 hidden = collect_submodules('wormhole')
 
