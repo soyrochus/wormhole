@@ -54,7 +54,6 @@ jobs:
           EOF
           chmod +x dist/wormhole/wormhole
           cp -r dist/wormhole out/linux/wormhole
-          cp out/linux/wormhole.desktop out/linux/
           cp packaging/icon.png out/linux/ || true
           tar -C out/linux -czf wormhole-linux.tar.gz .
 
@@ -80,7 +79,6 @@ jobs:
           chmod +x out/macos/Wormhole.app/Contents/MacOS/run
           [ -f packaging/icon.icns ] && cp packaging/icon.icns out/macos/Wormhole.app/Contents/Resources/applet.icns
           # package binary + app
-          mkdir -p out/macos
           cp -R dist/wormhole out/macos/wormhole
           tar -C out/macos -czf wormhole-macos.tar.gz Wormhole.app wormhole
 
@@ -94,28 +92,11 @@ jobs:
           $vbs = @'
           Set oShell = CreateObject("Wscript.Shell")
           Set oFSO = CreateObject("Scripting.FileSystemObject")
-          exe = oFSO.BuildPath(WScript.CreateObject("WScript.Shell").CurrentDirectory, "dist\wormhole\wormhole.exe")
+          scriptDir = oFSO.GetParentFolderName(WScript.ScriptFullName)
+          exe = oFSO.BuildPath(scriptDir, "dist\wormhole\wormhole.exe")
           oShell.Run """" & exe & """" & " --gui", 0, False
           '@
           Set-Content -Path Wormhole-GUI.vbs -Value $vbs -Encoding ASCII
-
-          # Desktop shortcuts (GUI and CLI)
-          $ws = New-Object -ComObject WScript.Shell
-          $desktop = [Environment]::GetFolderPath("Desktop")
-
-          $lnk1 = $ws.CreateShortcut("$desktop\Wormhole (GUI).lnk")
-          $lnk1.TargetPath = "wscript.exe"
-          $lnk1.Arguments = "`"`"$PWD\Wormhole-GUI.vbs`"`""
-          $lnk1.IconLocation = "$PWD\packaging\icon.ico"
-          $lnk1.WorkingDirectory = "$PWD\dist\wormhole"
-          $lnk1.Save()
-
-          $lnk2 = $ws.CreateShortcut("$desktop\Wormhole (CLI).lnk")
-          $lnk2.TargetPath = $bin
-          $lnk2.Arguments = ""
-          $lnk2.IconLocation = "$PWD\packaging\icon.ico"
-          $lnk2.WorkingDirectory = "$PWD\dist\wormhole"
-          $lnk2.Save()
 
           Compress-Archive -Path dist\wormhole\*, Wormhole-GUI.vbs, packaging\icon.ico -DestinationPath wormhole-windows.zip
 
