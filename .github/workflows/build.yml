@@ -94,11 +94,11 @@ jobs:
           EOF
           chmod +x out/macos/Wormhole.app/Contents/MacOS/run
           [ -f packaging/icon.icns ] && cp packaging/icon.icns out/macos/Wormhole.app/Contents/Resources/applet.icns
+          # Copy wormhole distribution
+          cp -R dist/wormhole out/macos/wormhole
       - name: Portable (macOS tar.gz)
         if: runner.os == 'macOS'
         run: |
-          mkdir -p out/macos
-          cp -R dist/wormhole out/macos/wormhole
           tar -C out/macos -czf wormhole-macos.tar.gz Wormhole.app wormhole
 
       # ---------- Windows: portable zip + VBS GUI launcher ----------
@@ -106,22 +106,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Copy-Item Wormhole-GUI.vbs .
           if (Test-Path packaging\icon.ico) { $icon = 'packaging\icon.ico' } else { $icon = $null }
-          # Create GUI and CLI desktop shortcuts for convenience when testing artifacts
-          $ws = New-Object -ComObject WScript.Shell
-          $desktop = [Environment]::GetFolderPath("Desktop")
-          $lnk1 = $ws.CreateShortcut("$desktop\Wormhole (GUI).lnk")
-          $lnk1.TargetPath = "wscript.exe"
-          $lnk1.Arguments = "`"`"$PWD\Wormhole-GUI.vbs`"`""
-          if ($icon) { $lnk1.IconLocation = "$PWD\$icon" }
-          $lnk1.WorkingDirectory = "$PWD\dist\wormhole"
-          $lnk1.Save()
-          $lnk2 = $ws.CreateShortcut("$desktop\Wormhole (CLI).lnk")
-          $lnk2.TargetPath = "$PWD\dist\wormhole\wormhole.exe"
-          if ($icon) { $lnk2.IconLocation = "$PWD\$icon" }
-          $lnk2.WorkingDirectory = "$PWD\dist\wormhole"
-          $lnk2.Save()
+          # Note: Skip desktop shortcuts in CI environment as they may not work
+          # Users can create shortcuts manually from the portable zip
           Compress-Archive -Path dist\wormhole\*, Wormhole-GUI.vbs -DestinationPath wormhole-windows.zip
 
       # Upload portable artifacts (what you already had)
@@ -147,7 +134,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Set-Content VERSION (git describe --tags --always)
+          git describe --tags --always | Set-Content VERSION
           Copy-Item Wormhole-GUI.vbs dist\wormhole\
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\wormhole.iss
       - name: Upload Windows installer
