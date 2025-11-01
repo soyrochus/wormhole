@@ -134,9 +134,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          git describe --tags --always | Set-Content VERSION
+          $version = git describe --tags --always
           Copy-Item Wormhole-GUI.vbs dist\wormhole\
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\wormhole.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion="$version" packaging\wormhole.iss
       - name: Upload Windows installer
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4

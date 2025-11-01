@@ -1,7 +1,9 @@
 ; Inno Setup script for Wormhole (one-folder)
 ; Save as packaging/wormhole.iss
 
-#define MyAppVersion Trim(FileRead("VERSION"))
+#ifndef MyAppVersion
+  #define MyAppVersion "1.0.0"
+#endif
 
 [Setup]
 AppName=Wormhole
