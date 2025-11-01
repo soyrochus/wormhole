@@ -181,6 +181,26 @@ uv run python -m wormhole.cli input.docx -t es --provider legacy-openai
 
 Choose the legacy adapter only when your account cannot access the Responses API; it emits the same JSON contract but leverages the Chat Completions endpoint behind the scenes.
 
+## 🐧 Development Environment
+
+This project uses [Pengu](https://github.com/soyrochus/pengu) — a tool that gives you a persistent Linux environment in a container, instantly available from any operating system.
+
+**Get started:**
+```bash
+# Install Pengu (Linux/macOS)
+curl -fsSL https://raw.githubusercontent.com/soyrochus/pengu/main/pengu-install.sh | bash -s -- -y
+
+# Start your Linux environment
+./pengu up && ./pengu shell
+```
+
+**Windows:**
+```powershell
+iwr -useb https://raw.githubusercontent.com/soyrochus/pengu/main/pengu-install.ps1 | iex
+.\pengu.ps1 up; .\pengu.ps1 shell
+```
+
+Your project files are available at `/workspace` with all dependencies pre-configured. No local setup required.
 
 ## Principles of Participation
 

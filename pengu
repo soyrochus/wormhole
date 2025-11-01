@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# Pengu - Persistent Linux environment in a container
+# Copyright (c) 2025, Iwan van der Kleijn | MIT License
+# https://github.com/soyrochus/pengu
+
+set -euo pipefail
+
+# Choose engine
+if command -v podman >/dev/null 2>&1; then ENG=podman
+elif command -v docker >/dev/null 2>&1; then ENG=docker
+else echo "Need podman or docker in PATH." >&2; exit 1; fi
+
+PROJECT="${PROJECT_NAME:-$(basename "$PWD")}"
+IMAGE="pengu:${PROJECT}"
+CONTAINER="${PROJECT}-pengu"
+HOMEVOL="${PROJECT}-pengu-home"
+APTVOL="${PROJECT}-pengu-apt"
+LISTSVOL="${PROJECT}-pengu-lists"
+
+uid(){ id -u; }
+gid(){ id -g; }
+
+container_exists() {
+  if [ "$ENG" = "podman" ]; then
+    $ENG container exists "$CONTAINER" >/dev/null 2>&1 || return 1
+  else
+    $ENG container inspect "$CONTAINER" >/dev/null 2>&1 || return 1
+  fi
+}
+
+show_help() {
+  cat <<EOF
+Pengu - Your persistent Linux buddy
+
+USAGE:
+  ./pengu [COMMAND]
+
+COMMANDS:
+  up       Start Pengu container (builds if needed)
+           - Creates a new Ubuntu environment for this project
+           - Builds the Docker image if it doesn't exist
+           - Starts the container with persistent volumes
+
+  shell    Enter Pengu shell as regular user
+           - Opens an interactive bash session
+           - Your project folder is mounted at /workspace
+           - If container isn't running, starts it automatically
+
+  root     Enter Pengu shell as root user
+           - Same as shell but with root privileges
+           - Useful for installing system packages with apt
+
+  stop     Stop the running Pengu container
+           - Gracefully stops the container
+           - Data in volumes is preserved
+
+  rm       Remove the Pengu container (keeps data)
+           - Deletes the container but preserves volumes
+           - Use 'up' to recreate container from existing data
+
+  rebuild  Rebuild and restart Pengu container
+           - Removes container, rebuilds image, starts fresh
+           - Preserves home directory and apt cache
+
+  commit   Save current container state to image
+           - Creates a new image with all installed packages
+           - Useful for creating custom base images
+
+  nuke     Complete removal (container + all data)
+           - ⚠️  DESTRUCTIVE: Removes everything permanently
+           - Deletes container and all persistent volumes
+
+  help     Show this help message
+
+EXAMPLES:
+  ./pengu up && ./pengu shell    # Start and enter Pengu
+  ./pengu root                   # Enter as root to install packages
+  ./pengu stop && ./pengu rm     # Clean stop and remove
+
+PROJECT: $PROJECT
+ENGINE:  $ENG
+
+For more info: https://github.com/soyrochus/pengu
+EOF
+}
+
+build() {
+  $ENG build -t "$IMAGE" \
+    --build-arg UID="$(uid)" \
+    --build-arg GID="$(gid)" \
+    --build-arg USERNAME=pengu \
+    .
+}
+
+create_if_needed() {
+  local selinux_suffix=""
+  if [ "$ENG" = "podman" ]; then
+    selinux_suffix=":Z"
+  fi
+
+  container_exists || \
+  $ENG create --name "$CONTAINER" \
+    -v "$PWD:/workspace${selinux_suffix}" \
+    -v "$HOMEVOL:/home/pengu${selinux_suffix}" \
+    -v "$APTVOL:/var/cache/apt${selinux_suffix}" \
+    -v "$LISTSVOL:/var/lib/apt/lists${selinux_suffix}" \
+    "$IMAGE" tail -f /dev/null >/dev/null
+}
+
+case "${1:-}" in
+  up)      build; create_if_needed; $ENG start "$CONTAINER"; echo "Pengu up → ./pengu shell" ;;
+  shell)   $ENG exec -it "$CONTAINER" bash || { "$0" up; $ENG exec -it "$CONTAINER" bash; } ;;
+  root)    $ENG exec -it --user 0 "$CONTAINER" bash || { "$0" up; $ENG exec -it --user 0 "$CONTAINER" bash; } ;;
+  stop)    $ENG stop "$CONTAINER" || true ;;
+  rm)      $ENG rm -f "$CONTAINER" || true ;;
+  rebuild) $ENG rm -f "$CONTAINER" || true; build; create_if_needed; $ENG start "$CONTAINER" ;;
+  commit)  $ENG commit "$CONTAINER" "$IMAGE"; echo "Committed → $IMAGE" ;;
+  nuke)    $ENG rm -f "$CONTAINER" || true; $ENG volume rm -f "$HOMEVOL" "$APTVOL" "$LISTSVOL" || true ;;
+  help|--help|-h) show_help ;;
+  "")
+    echo "Usage: ./pengu [COMMAND]"
+    echo "Try './pengu help' for more information."
+    ;;
+  *)
+    echo "Error: Unknown command '$1'"
+    echo "Try './pengu help' for available commands."
+    exit 1
+    ;;
+esac
