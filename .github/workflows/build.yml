@@ -137,6 +137,16 @@ jobs:
           $version = git describe --tags --always
           Copy-Item Wormhole-GUI.vbs dist\wormhole\
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion="$version" packaging\wormhole.iss
+          # Debug: List files to see if installer was created
+          Write-Host "Files in current directory:"
+          Get-ChildItem -Name "*.exe"
+          Write-Host "Checking for installer file:"
+          if (Test-Path "wormhole-windows-installer.exe") {
+            Write-Host "✓ Installer found: wormhole-windows-installer.exe"
+            Get-Item "wormhole-windows-installer.exe" | Select-Object Name, Length, LastWriteTime
+          } else {
+            Write-Host "✗ Installer not found"
+          }
       - name: Upload Windows installer
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
