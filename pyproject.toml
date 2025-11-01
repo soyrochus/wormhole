@@ -1,6 +1,6 @@
 [project]
 name = "wormhole"
-version = "1.0.2"
+version = "1.0.0"
 description = "An document translator preserving document structure, lay-out and formatting"
 readme = "README.md"
 requires-python = ">=3.13"

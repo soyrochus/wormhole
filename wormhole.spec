@@ -14,8 +14,9 @@ a = Analysis([entry], pathex=[], binaries=[], datas=datas,
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 # console=True so CLI works; GUI users will launch via desktop wrappers that hide the console on Windows
-exe = EXE(pyz, a.scripts, a.binaries, a.zipfiles, a.datas,
-          name='wormhole', console=True, debug=False, strip=False, upx=False)
+exe = EXE(pyz, a.scripts, [],
+          name='wormhole', console=True, debug=False, strip=False, upx=False,
+          exclude_binaries=True)
 
 coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas,
                strip=False, upx=False, name='wormhole')
