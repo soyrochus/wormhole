@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import os
 import pathlib
 import re
 import sys
 from typing import Iterable, Optional
 
-from dotenv import load_dotenv
-
+from .configuration import get_settings
 from .errors import (
     AbortRequested,
     NonInteractiveAbort,
@@ -112,17 +110,6 @@ def derive_output_path(input_path: pathlib.Path, language: str) -> pathlib.Path:
     addition = sanitise_language_for_filename(language)
     candidate = f"{stem}_{addition}{suffix}"
     return input_path.with_name(candidate)
-
-
-def _env_flag(*names: str) -> bool:
-    """Interpret boolean-like environment variables."""
-
-    truthy = {"1", "true", "yes", "on"}
-    for name in names:
-        value = os.getenv(name)
-        if value is not None and value.strip().lower() in truthy:
-            return True
-    return False
 
 
 def execute_translation(
@@ -227,14 +214,20 @@ def print_summary(summary: TranslationSummary) -> None:
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
-    load_dotenv()
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    provider_debug = bool(
-        args.debug_provider
-        or _env_flag("WORMHOLE_PROVIDER_DEBUG", "WORMHOLE_DEBUG_PROVIDER")
-    )
+    provider_debug = bool(args.debug_provider)
+    if not provider_debug:
+        try:
+            settings = get_settings()
+        except TranslationProviderConfigurationError as exc:
+            print(exc)
+            return 1
+        provider_debug = bool(
+            settings.WORMHOLE_PROVIDER_DEBUG
+            or settings.WORMHOLE_DEBUG_PROVIDER
+        )
 
     if args.gui:
         from .gui import launch_gui

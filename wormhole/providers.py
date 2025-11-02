@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Sequence
+
+from .configuration import get_settings
 
 from .errors import (
     TranslationProviderConfigurationError,
@@ -49,14 +50,23 @@ class OpenAITranslationProvider(TranslationProvider):
 
     DEFAULT_MODEL = "gpt-5-mini"  # "gpt-4o-mini"
 
-    def __init__(self, *, debug: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        debug: bool = False,
+        provider_kind: str | None = None,
+    ) -> None:
         self.debug = debug
-        provider_value = os.getenv("LLM_PROVIDER", "openai") or "openai"
-        normalized = provider_value.strip().lower()
-        if normalized in {"azure_open_ai", "azure-openai"}:
-            normalized = "azure_openai"
+        self._settings = get_settings()
+        requested = provider_kind or self._settings.LLM_PROVIDER
+        normalized = requested.strip().lower().replace("-", "_")
+        synonyms = {
+            "azure_open_ai": "azure_openai",
+            "azureopenai": "azure_openai",
+        }
+        normalized = synonyms.get(normalized, normalized)
         if normalized not in {"openai", "azure_openai"}:
-            normalized = "openai"
+            normalized = self._settings.LLM_PROVIDER
 
         self.provider_kind = normalized
         self._client, self._default_model = self._build_client()
@@ -68,7 +78,7 @@ class OpenAITranslationProvider(TranslationProvider):
         return self._build_openai_client()
 
     def _build_openai_client(self) -> tuple[Any, str]:
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = self._settings.OPENAI_API_KEY
         if not api_key:
             raise TranslationProviderConfigurationError(
                 "OpenAI configuration missing. Set OPENAI_API_KEY or choose a "
@@ -84,10 +94,10 @@ class OpenAITranslationProvider(TranslationProvider):
         return OpenAI(api_key=api_key), self.DEFAULT_MODEL
 
     def _build_azure_client(self) -> tuple[Any, str]:
-        api_key = os.getenv("AZURE_OPENAI_API_KEY")
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        api_version = os.getenv("AZURE_OPENAI_API_VERSION")
-        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        api_key = self._settings.AZURE_OPENAI_API_KEY
+        endpoint = self._settings.AZURE_OPENAI_ENDPOINT
+        api_version = self._settings.AZURE_OPENAI_API_VERSION
+        deployment_name = self._settings.AZURE_OPENAI_DEPLOYMENT_NAME
 
         missing = [
             name
@@ -100,9 +110,10 @@ class OpenAITranslationProvider(TranslationProvider):
             if not value
         ]
         if missing:
+            details = ", ".join(missing)
             raise TranslationProviderConfigurationError(
                 "Azure OpenAI configuration incomplete. Please set: "
-                + ", ".join(missing)
+                + details
                 + "."
             )
 
@@ -112,6 +123,11 @@ class OpenAITranslationProvider(TranslationProvider):
             raise TranslationProviderConfigurationError(
                 "OpenAI Python SDK not installed. Install with `pip install openai`."
             ) from exc
+
+        assert api_key is not None
+        assert endpoint is not None
+        assert api_version is not None
+        assert deployment_name is not None
 
         client = AzureOpenAI(
             api_key=api_key,
@@ -340,6 +356,14 @@ class OpenAITranslationProvider(TranslationProvider):
 class LegacyOpenAITranslationProvider(OpenAITranslationProvider):
     """Translation provider that uses the Chat Completions API for compatibility."""
 
+    def __init__(
+        self,
+        *,
+        debug: bool = False,
+        provider_kind: str | None = None,
+    ) -> None:
+        super().__init__(debug=debug, provider_kind=provider_kind)
+
     def _invoke_model(
         self,
         *,
@@ -410,11 +434,27 @@ class LegacyOpenAITranslationProvider(OpenAITranslationProvider):
 def build_provider(name: str | None, *, debug: bool = False) -> TranslationProvider:
     """Factory to create providers by name."""
 
-    normalized = (name or "openai").strip().lower()
-    if normalized in {"openai", "gpt", "default"}:
-        return OpenAITranslationProvider(debug=debug)
-    if normalized in {"legacy-openai", "legacy_openai", "legacy", "openai-legacy"}:
-        return LegacyOpenAITranslationProvider(debug=debug)
+    settings = get_settings()
+    candidate = name or settings.LLM_PROVIDER
+    normalized = candidate.strip().lower().replace("-", "_")
+    synonyms = {
+        "gpt": "openai",
+        "default": settings.LLM_PROVIDER,
+        "azure_open_ai": "azure_openai",
+        "azureopenai": "azure_openai",
+    }
+    normalized = synonyms.get(normalized, normalized)
+
+    if normalized in {"openai", "azure_openai"}:
+        return OpenAITranslationProvider(
+            debug=debug,
+            provider_kind=normalized,
+        )
+    if normalized in {"legacy_openai", "legacy"}:
+        return LegacyOpenAITranslationProvider(
+            debug=debug,
+            provider_kind="openai",
+        )
     if normalized in {"echo", "noop", "mock"}:
         return EchoTranslationProvider()
     raise TranslationProviderConfigurationError(

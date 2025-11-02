@@ -1,17 +1,64 @@
-Extend the current OpenAI provider so it can also work with Azure OpenAI. So NO need to select a different provider in this case. 
+# Build Prompt — Integrate **Prepper** as Wormhole’s config mechanism
 
-The determinator to choose either connection to OpenAI or Azure OpenAI should be 
-the env variable LLM_PROVIDER. These could contain the values "openai" or "azure_openai" 
+## Mission
 
-if azure_open_ai then the following  envioronment values should be used
-DO NOT HARD CODE THE EXAMPKE VALUES
+Refactor Wormhole’s configuration to use **Prepper** as the single configuration loader while **preserving** current behavior:
 
-AZURE_OPENAI_API_KEY=example-key
-AZURE_OPENAI_ENDPOINT=https://corpus-oai-we-001.openai.azure.com
-AZURE_OPENAI_API_VERSION=2024-12-01-preview
-AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
-AZURE_OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+* Keep support for **`.env`** and **direct environment variables** (current implementation).
+* **Add** support for reading a **local config file in the user’s home directory**.
+* No env namespace/prefix filtering: **accept flat env variable names exactly as written**.
+
+These characateristics will be provoded by Pepper. They DO NOT HAVE TO BE IMPLEMENTED. 
+
+The agent must read **Prepper’s API and usage details** from:
+
+* `<project_root>/docs/prepper-readme.md`
 
 
 
+## Scope & Requirements
+
+### 1) Dependency & wiring
+
+* Verify that  **Prepper** has been added as a dependecy
+
+* REmove the existing `python-dotenv`/manual `os.environ` 
+
+### 2) Sources & precedence (exact)
+
+* Use yaml as the **one file format** chosen for Wormhole 
+
+### 3) Variables to support (flat names, type-safe)
+
+The agent must support and validate the following fields (exact names; no renaming; no prefixing):
+
+* `LLM_PROVIDER` — string; allowed values include `"azure_openai"`, `"openai"`
+* `AZURE_OPENAI_API_KEY` — string (secret)
+* `AZURE_OPENAI_ENDPOINT` — string (URL)
+* `AZURE_OPENAI_API_VERSION` — string (e.g., `2024-12-01-preview`)
+* `AZURE_OPENAI_DEPLOYMENT_NAME` — string
+* `OPENAI_API_KEY` — string (secret)
+
+Behavioral notes:
+
+* If `LLM_PROVIDER="azure_openai"`, then **Azure** fields must be present and valid.
+* If `LLM_PROVIDER="openai"`, then **`OPENAI_API_KEY`** must be present and valid; Azure fields may be ignored.
+
+
+### 4) Schema & validation
+
+* Define a **schema object** (type-safe; use modern Python typing) that declares the fields above, types, defaults (if any), and validation rules (cross-field rules for provider-specific requirements).
+* Ensure aggregated validation errors (fail fast with a single, readable report listing all issues and their sources).
+
+
+### 7) Public API impact
+
+* Retreive from Pepper the small function or object (consistent with current app structure) that returns the **typed, validated, immutable** config for the rest of Wormhole.
+* The rest of the codebase should **not** directly read `os.environ` nor parse `.env`; it should consume the new config object exclusively.
+
+### 8) Docs
+
+* Keep the developer documentation in the repo up to date.
+* Reference   Prepper doc at https://github.com/soyrochus/prepper
+* Update Wormhole’s README or internal docs to state the **new precedence** and how to provide user-home config.
 

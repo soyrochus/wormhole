@@ -20,13 +20,13 @@ The CLI is designed for teams that want a provider-agnostic workflow: switching 
 - Layout-preserving reinsertion, even across runs with custom formatting.
 - Batch planner that respects sentence boundaries with a default 2,000 character budget.
 - Automatic retries, resumable error policy, and friendly messaging for interactive and non-interactive environments.
-- Provider abstraction with an OpenAI implementation out of the box and support for `.env` configuration via `python-dotenv`.
+- Provider abstraction with an OpenAI implementation out of the box and Prepper-powered configuration that honours `.env`, environment variables, and home-level YAML files.
 
 ## Requirements
 
 - Python 3.13 (managed through [uv](https://github.com/astral-sh/uv)).
 - An OpenAI API key (`OPENAI_API_KEY`) when using the default provider.
-- Optional `.env` file in the project root for environment configuration (`OPENAI_API_KEY`, `WORMHOLE_PROVIDER_DEBUG`, etc.).
+- Optional `.env` file in your working directory or a YAML config in your home directory for environment configuration (`OPENAI_API_KEY`, `WORMHOLE_PROVIDER_DEBUG`, etc.).
 
 ## Installation (uv only)
 
@@ -49,15 +49,34 @@ The CLI is designed for teams that want a provider-agnostic workflow: switching 
    `uv` reads `pyproject.toml` and `uv.lock`, creating an isolated environment pinned to the recorded dependency versions.
 
 4. **Configure credentials**  
-   Create a `.env` file or export environment variables so the CLI can load your credentials:
-   
+   Prepper lets you supply configuration through any of its supported sources. For quick experiments drop values in a `.env` file:
+
    ```bash
    echo "OPENAI_API_KEY=sk-your-key" >> .env
    # Optional additional flags:
    # echo "WORMHOLE_PROVIDER_DEBUG=1" >> .env
    ```
-   
-   `wormhole.cli` calls `load_dotenv()` on startup, so entries in `.env` automatically populate the environment.
+
+   For long-lived setups create the home YAML file instead:
+
+   ```yaml
+   # ~/.config/Wormhole/wormhole.yaml
+   LLM_PROVIDER: openai
+   OPENAI_API_KEY: sk-your-key
+   ```
+
+   Prepper merges sources in this order (last wins): platform config directory (`~/.config/Wormhole/wormhole.yaml` on Linux, `%APPDATA%\\Wormhole\\wormhole.yaml` on Windows, `~/Library/Application Support/Wormhole/wormhole.yaml` on macOS), optional `config.yaml` in the current working directory, `.env` in the working directory, and finally real environment variables. Environment variables are read without a namespace or prefix so flat names like `OPENAI_API_KEY` and `LLM_PROVIDER` work unchanged.
+
+## Configuration
+
+Wormhole's schema is enforced by [Prepper](https://github.com/soyrochus/prepper), so configuration errors are reported before any work starts. Supported keys:
+
+- `LLM_PROVIDER` — one of `openai` (default) or `azure_openai`.
+- `OPENAI_API_KEY` — required when `LLM_PROVIDER=openai`.
+- `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENT_NAME` — required together when `LLM_PROVIDER=azure_openai`.
+- `WORMHOLE_PROVIDER_DEBUG` / `WORMHOLE_DEBUG_PROVIDER` — treat any truthy value as "enable verbose provider logging".
+
+Validation errors list every missing or invalid value along with the source that supplied it, helping you fix configuration quickly.
 
 ## Usage Overview
 
