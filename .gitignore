@@ -169,4 +169,5 @@ cython_debug/
 
 testdocs/
 published/
+translated_docs/
 

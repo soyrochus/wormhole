@@ -53,6 +53,8 @@ The CLI is designed for teams that want a provider-agnostic workflow: switching 
    
    ```bash
    echo "OPENAI_API_KEY=sk-your-key" >> .env
+   # Optional: override the default OpenAI model globally
+   # echo "OPENAI_MODEL=gpt-4o-mini" >> .env
    # Optional additional flags:
    # echo "WORMHOLE_PROVIDER_DEBUG=1" >> .env
    ```
@@ -125,7 +127,7 @@ UV_ARGS="--python 3.11" ./wormhole.sh --version
 | `-s, --source-language` | Optional source language hint. | Helps segmentation and provider prompts. |
 | `-o, --output` | Output file path. | Defaults to appending the target language to the input stem; the input file is never overwritten. |
 | `-p, --provider` | Translation provider identifier. | Defaults to `openai`. |
-| `-m, --model` | Provider-specific model or engine name. | Overrides provider default (`gpt-4o-mini` for OpenAI). |
+| `-m, --model` | Provider-specific model or engine name. | Overrides provider default (OpenAI reads `OPENAI_MODEL` if set, otherwise `gpt-5.2`). |
 | `-b, --batch-guidance` | Approximate max characters per translation batch. | Integer, default `2000`; sentences are kept intact where possible. |
 | `-f, --force` | Allow overwriting an existing output file. | Without this flag, the CLI aborts if the output path exists. |
 | `--non-interactive` | Disable prompts and automatic pauses. | Suitable for CI; still respects error thresholds. |
@@ -154,6 +156,7 @@ Wormhole ships with a single OpenAI adapter that understands two transport modes
 Select the correct backend through environment variables:
 
 - `LLM_PROVIDER=openai` (default) uses `OPENAI_API_KEY`.
+   - Optionally set `OPENAI_MODEL` to override the default model without passing `--model`.
 - `LLM_PROVIDER=azure_openai` switches the same adapter to Azure OpenAI; provide:
   - `AZURE_OPENAI_API_KEY`
   - `AZURE_OPENAI_ENDPOINT`

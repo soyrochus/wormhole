@@ -47,7 +47,7 @@ class EchoTranslationProvider(TranslationProvider):
 class OpenAITranslationProvider(TranslationProvider):
     """Translation provider that uses OpenAI chat models."""
 
-    DEFAULT_MODEL = "gpt-5-mini"  # "gpt-4o-mini"
+    DEFAULT_MODEL = "gpt-5.2"  # "gpt-4o-mini"
 
     def __init__(self, *, debug: bool = False) -> None:
         self.debug = debug
@@ -81,7 +81,8 @@ class OpenAITranslationProvider(TranslationProvider):
                 "OpenAI Python SDK not installed. Install with `pip install openai`."
             ) from exc
 
-        return OpenAI(api_key=api_key), self.DEFAULT_MODEL
+        configured_model = os.getenv("OPENAI_MODEL") or self.DEFAULT_MODEL
+        return OpenAI(api_key=api_key), configured_model
 
     def _build_azure_client(self) -> tuple[Any, str]:
         api_key = os.getenv("AZURE_OPENAI_API_KEY")
