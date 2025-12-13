@@ -90,6 +90,10 @@ Prefer a visual workflow? Launch the Tkinter GUI with `./wormhole.sh --gui` on M
 
 ![WOrmhole Screen shot](./images/wormhole-gui.png)
 
+## Architecture & Technical Details
+
+For a complete technical overview including architecture diagrams, component descriptions, data flow, and design decisions, see [TECHSPEC.md](TECHSPEC.md).
+
 ### Launcher scripts (Bash and PowerShell)
 
 If you prefer a one-command launcher that manages the uv environment for you, use the included wrappers:

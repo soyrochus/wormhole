@@ -7,7 +7,7 @@ import os
 import pathlib
 import re
 import sys
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
 from dotenv import load_dotenv
 
@@ -19,6 +19,7 @@ from .errors import (
     UnsupportedFileTypeError,
     WormholeError,
 )
+from .interaction import TranslationIO
 from .translator import TranslationRunner, TranslationSummary, validate_paths
 
 
@@ -125,6 +126,27 @@ def _env_flag(*names: str) -> bool:
     return False
 
 
+class ConsoleIO:
+    """Console-backed implementation of the translation I/O protocol."""
+
+    def info(self, message: str) -> None:
+        print(message)
+
+    def error(self, message: str) -> None:
+        print(message, file=sys.stderr)
+
+    def prompt_choice(self, prompt: str, choices: Sequence[str]) -> str:
+        choice_hint = "/".join(choices)
+        shorthand = {choice[0]: choice for choice in choices if choice}
+        while True:
+            response = input(f"{prompt} ({choice_hint}) ").strip().lower()
+            if response in shorthand:
+                return shorthand[response]
+            if response in choices:
+                return response
+            print(f"Please respond with one of: {choice_hint}.")
+
+
 def execute_translation(
     *,
     input_file: str,
@@ -138,6 +160,7 @@ def execute_translation(
     non_interactive: bool,
     verbose: bool,
     provider_debug: bool,
+    io: TranslationIO | None = None,
 ) -> tuple[int, TranslationSummary | None, str | None]:
     """Execute a translation run and return the exit code, summary, and message."""
 
@@ -147,6 +170,7 @@ def execute_translation(
         if output_file
         else derive_output_path(input_path, target_language)
     )
+    io = io or ConsoleIO()
 
     try:
         validate_paths(input_path, output_path, force_overwrite=force_overwrite)
@@ -170,6 +194,7 @@ def execute_translation(
         interactive=not non_interactive,
         verbose=verbose,
         provider_debug=provider_debug,
+        io=io,
     )
 
     try:

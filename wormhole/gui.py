@@ -3,16 +3,78 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, Callable, Optional
+from typing import Any, Optional, Protocol, Sequence
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
+from .interaction import TranslationIO
 from .translator import TranslationSummary
 
 
-TranslationExecutor = Callable[..., tuple[int, Optional[TranslationSummary], Optional[str]]]
-SummaryPrinter = Callable[[TranslationSummary], None]
+class TranslationExecutor(Protocol):
+    def __call__(
+        self,
+        *,
+        input_file: str,
+        output_file: Optional[str],
+        target_language: str,
+        source_language: Optional[str],
+        provider: Optional[str],
+        model: Optional[str],
+        batch_guidance: int,
+        force_overwrite: bool,
+        non_interactive: bool,
+        verbose: bool,
+        provider_debug: bool,
+        io: TranslationIO | None = None,
+    ) -> tuple[int, Optional[TranslationSummary], Optional[str]]:
+        ...
+
+
+class SummaryPrinter(Protocol):
+    def __call__(self, summary: TranslationSummary) -> None:
+        ...
+
+
+class GuiIO:
+    """Tk-backed translation I/O implementation."""
+
+    def __init__(self, root: tk.Tk, status_var: tk.StringVar) -> None:
+        self.root = root
+        self.status_var = status_var
+
+    def info(self, message: str) -> None:
+        self._update_status(message)
+
+    def error(self, message: str) -> None:
+        self._update_status(f"Error: {message}")
+
+    def prompt_choice(self, prompt: str, choices: Sequence[str]) -> str:
+        """Show a modal prompt on the UI thread and return the user's choice."""
+
+        event = threading.Event()
+        result: list[str] = []
+
+        def ask() -> None:
+            choice_hint = ", ".join(choices)
+            response = simpledialog.askstring(
+                "Wormhole",
+                f"{prompt}\nOptions: {choice_hint}",
+                parent=self.root,
+            )
+            if response is None:
+                result.append("abort")
+            else:
+                result.append(response.strip())
+            event.set()
+
+        self.root.after(0, ask)
+        event.wait()
+        return result[0] if result else choices[0]
+
+    def _update_status(self, message: str) -> None:
+        self.root.after(0, lambda: self.status_var.set(message))
 
 
 class WormholeGUI:
@@ -256,7 +318,8 @@ class WormholeGUI:
     def _execute_translation(self, config: dict[str, Any]) -> None:
         """Invoke the translation executor in a worker thread."""
 
-        exit_code, summary, message = self.translation_executor(**config)
+        io = GuiIO(self.root, self.status_var)
+        exit_code, summary, message = self.translation_executor(io=io, **config)
         self.root.after(
             0,
             self._handle_result,

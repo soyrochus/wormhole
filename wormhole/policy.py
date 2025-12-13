@@ -11,13 +11,15 @@ from .errors import (
     ErrorTracker,
     NonInteractiveAbort,
 )
+from .interaction import NullIO, TranslationIO
 
 
 class ErrorPolicy:
     """Implements the resilient error policy described in the specification."""
 
-    def __init__(self, *, interactive: bool) -> None:
+    def __init__(self, *, interactive: bool, io: TranslationIO | None = None) -> None:
         self.interactive = interactive
+        self.io = io or NullIO()
         self.records: List[ErrorRecord] = []
         self.tracker = ErrorTracker()
 
@@ -37,7 +39,7 @@ class ErrorPolicy:
         self.records.append(ErrorRecord(category=category, message=message, details=details))
         consecutive, total, threshold = self.tracker.register(category)
 
-        print(message)
+        self.io.error(message)
 
         if not threshold:
             return "continue"
@@ -53,12 +55,13 @@ class ErrorPolicy:
                 "Error threshold exceeded in non-interactive mode. Stopping safely."
             )
 
+        choices = ["continue", "retry", "abort"]
         while True:
-            response = input(f"{prompt} ").strip().lower()
+            response = self.io.prompt_choice(prompt, choices).strip().lower()
             if response in {"continue", "c"}:
                 return "continue"
             if response in {"retry", "r"}:
                 return "retry"
             if response in {"abort", "a"}:
                 raise AbortRequested("Abort requested by user.")
-            print("Please respond with Continue, Retry, or Abort (c/r/a).")
+            self.io.error("Please respond with Continue, Retry, or Abort (c/r/a).")

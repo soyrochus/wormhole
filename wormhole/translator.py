@@ -14,6 +14,7 @@ from .errors import (
     TranslationProviderError,
     WormholeError,
 )
+from .interaction import NullIO, TranslationIO
 from .policy import ErrorPolicy
 from .providers import TranslationProvider, build_provider
 from .segmenter import BatchBuilder, Segmenter
@@ -57,6 +58,7 @@ class TranslationRunner:
         interactive: bool,
         verbose: bool,
         provider_debug: bool,
+        io: TranslationIO | None = None,
     ) -> None:
         self.input_path = input_path
         self.output_path = output_path
@@ -68,8 +70,9 @@ class TranslationRunner:
         self.interactive = interactive
         self.verbose = verbose
         self.provider_debug = provider_debug
+        self.io = io or NullIO()
 
-        self.error_policy = ErrorPolicy(interactive=interactive)
+        self.error_policy = ErrorPolicy(interactive=interactive, io=self.io)
         self.max_retries = 3
         self.retry_backoff = [1, 4, 9]
 
@@ -85,7 +88,7 @@ class TranslationRunner:
         batch_builder = BatchBuilder(self.batch_budget)
         batches = batch_builder.build(segments)
         if self.verbose:
-            print(
+            self.io.info(
                 f"Prepared {len(units)} text units, "
                 f"{len(segments)} segments, {len(batches)} batches."
             )
@@ -185,7 +188,7 @@ class TranslationRunner:
                 self._map_translations(batch.segments, mapping, buffers)
                 if self.verbose:
                     total_chars = sum(len(segment.text) for segment in batch.segments)
-                    print(
+                    self.io.info(
                         f"Processed batch {batch.batch_id} "
                         f"({len(batch.segments)} segments, {total_chars} chars)."
                     )
@@ -195,7 +198,7 @@ class TranslationRunner:
                 attempt += 1
                 if attempt <= self.max_retries:
                     wait_time = self.retry_backoff[min(attempt - 1, len(self.retry_backoff) - 1)]
-                    print(
+                    self.io.error(
                         "Could not translate one batch "
                         f"(attempt {attempt} of {self.max_retries} — {exc}). "
                         "Retrying automatically..."
@@ -213,7 +216,7 @@ class TranslationRunner:
 
                 # Skip this batch gracefully.
                 if self.verbose:
-                    print(
+                    self.io.info(
                         f"Skipping batch {batch.batch_id} after repeated failures."
                     )
                 for segment in batch.segments:
