@@ -59,6 +59,7 @@ class TranslationRunner:
         verbose: bool,
         provider_debug: bool,
         io: TranslationIO | None = None,
+        custom_instructions: str | None = None,
     ) -> None:
         self.input_path = input_path
         self.output_path = output_path
@@ -71,6 +72,7 @@ class TranslationRunner:
         self.verbose = verbose
         self.provider_debug = provider_debug
         self.io = io or NullIO()
+        self.custom_instructions = custom_instructions
 
         self.error_policy = ErrorPolicy(interactive=interactive, io=self.io)
         self.max_retries = 3
@@ -184,6 +186,7 @@ class TranslationRunner:
                     source_language=self.source_language,
                     target_language=self.target_language,
                     model=self.model,
+                    custom_instructions=self.custom_instructions,
                 )
                 self._map_translations(batch.segments, mapping, buffers)
                 if self.verbose:

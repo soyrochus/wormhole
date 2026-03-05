@@ -91,6 +91,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Log complete provider requests and responses for troubleshooting.",
     )
     parser.add_argument(
+        "-i",
+        "--instructions",
+        help="Custom instructions appended to the translation prompt.",
+    )
+    parser.add_argument(
         "--gui",
         action="store_true",
         help="Launch the graphical interface for configuring and running translations.",
@@ -160,6 +165,7 @@ def execute_translation(
     non_interactive: bool,
     verbose: bool,
     provider_debug: bool,
+    custom_instructions: str | None = None,
     io: TranslationIO | None = None,
 ) -> tuple[int, TranslationSummary | None, str | None]:
     """Execute a translation run and return the exit code, summary, and message."""
@@ -195,6 +201,7 @@ def execute_translation(
         verbose=verbose,
         provider_debug=provider_debug,
         io=io,
+        custom_instructions=custom_instructions,
     )
 
     try:
@@ -288,6 +295,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         non_interactive=args.non_interactive,
         verbose=args.verbose,
         provider_debug=provider_debug,
+        custom_instructions=args.instructions,
     )
 
     if message:

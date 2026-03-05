@@ -133,6 +133,7 @@ UV_ARGS="--python 3.11" ./wormhole.sh --version
 | `-p, --provider` | Translation provider identifier. | Defaults to `openai`. |
 | `-m, --model` | Provider-specific model or engine name. | Overrides provider default (OpenAI reads `OPENAI_MODEL` if set, otherwise `gpt-5.2`). |
 | `-b, --batch-guidance` | Approximate max characters per translation batch. | Integer, default `2000`; sentences are kept intact where possible. |
+| `-i, --instructions` | Custom instructions appended to the translation prompt. | Free-form text added to the LLM system prompt for every batch. |
 | `-f, --force` | Allow overwriting an existing output file. | Without this flag, the CLI aborts if the output path exists. |
 | `--non-interactive` | Disable prompts and automatic pauses. | Suitable for CI; still respects error thresholds. |
 | `-v, --verbose` | Print detailed progress information. | Helpful for tracking segmentation and batches. |
@@ -145,6 +146,51 @@ UV_ARGS="--python 3.11" ./wormhole.sh --version
 - If the output file exists and `--force` is not supplied, Wormhole exits with a friendly message.
 - Recoverable errors are retried automatically (up to three times per batch). After repeated failures, you can choose to continue, retry, or abort; in non-interactive mode the CLI continues until policy limits are exceeded.
 - Irrecoverable errors (missing files, unsupported types, configuration issues) produce human-readable guidance and exit with a non-zero code.
+
+## Custom Instructions
+
+The `-i` / `--instructions` flag lets you append domain-specific guidance to the translation prompt sent to the LLM on every batch. This is useful when general-purpose translation is not enough and the source material requires specialised handling.
+
+```bash
+uv run python -m wormhole.cli contract.docx -t es \
+  --instructions "Preserve all defined terms in their original English form enclosed in quotation marks."
+```
+
+The instructions are appended verbatim after the built-in system prompt, so the LLM still receives the core formatting and JSON-structure requirements first.
+
+> **Note:** Instructions are applied independently to each batch. The LLM does not see the full document at once, so guidance that requires whole-document context (e.g. "use the terminology introduced in section 1") will not be reliably applied. Keep instructions stateless and segment-level wherever possible.
+
+The GUI exposes the same capability through the **Custom instructions** text field.
+
+### Example: Legal document translation
+
+A common challenge when translating legal or regulatory documents is that concepts do not map one-to-one across legal systems. A term like *"writ of mandamus"* (U.S. common law) has no exact equivalent in civil law systems; a literal translation would distort its meaning. Similarly, Dutch or Spanish legal instruments may have no direct counterpart in English contract law.
+
+The following instruction addresses this by asking the model to apply system-aware legal equivalence rather than literal word substitution (see [`example-custom-instruction.md`](example-custom-instruction.md)):
+
+```
+Treat the text as part of a legal or regulatory document.
+
+When encountering legal terminology:
+
+Prefer the correct legal equivalent used in the target legal system, not a literal translation.
+
+If the concept belongs to a different legal system and no exact equivalent exists, translate
+using the closest functional term and add a short clarification in parentheses.
+
+Avoid false friends and misleading literal translations.
+
+Preserve the original meaning and keep the translation stylistically appropriate for legal writing.
+```
+
+Pass it on the command line:
+
+```bash
+wormhole contract.docx -t nl \
+  --instructions "$(cat example-custom-instruction.md)"
+```
+
+Or paste it directly into the **Custom instructions** field in the GUI before running the translation.
 
 ## Working with Providers
 

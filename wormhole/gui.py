@@ -27,6 +27,7 @@ class TranslationExecutor(Protocol):
         non_interactive: bool,
         verbose: bool,
         provider_debug: bool,
+        custom_instructions: Optional[str] = None,
         io: TranslationIO | None = None,
     ) -> tuple[int, Optional[TranslationSummary], Optional[str]]:
         ...
@@ -136,8 +137,7 @@ class WormholeGUI:
         """Construct the Tkinter layout."""
 
         self.root.title("Wormhole Translator")
-        #self.root.geometry("640x520")
-        self.root.geometry("640x580")
+        self.root.geometry("640x720")
         self.root.resizable(False, False)
 
         main_frame = ttk.Frame(self.root, padding=20)
@@ -195,9 +195,16 @@ class WormholeGUI:
             row=13, column=0, sticky="w", pady=(0, 10)
         )
 
+        # Custom instructions
+        ttk.Label(main_frame, text="Custom instructions (optional)").grid(
+            row=14, column=0, sticky="w"
+        )
+        self.instructions_text = tk.Text(main_frame, width=45, height=5, wrap="word")
+        self.instructions_text.grid(row=15, column=0, columnspan=2, sticky="we", pady=(0, 10))
+
         # Checkboxes
         checkbox_frame = ttk.Frame(main_frame)
-        checkbox_frame.grid(row=14, column=0, columnspan=2, sticky="w", pady=(0, 10))
+        checkbox_frame.grid(row=16, column=0, columnspan=2, sticky="w", pady=(0, 10))
         ttk.Checkbutton(
             checkbox_frame,
             text="Force overwrite existing output",
@@ -211,12 +218,12 @@ class WormholeGUI:
 
         # Status label
         ttk.Label(main_frame, textvariable=self.status_var, foreground="#555").grid(
-            row=15, column=0, columnspan=2, sticky="w", pady=(5, 15)
+            row=17, column=0, columnspan=2, sticky="w", pady=(5, 15)
         )
 
         # Action buttons
         action_frame = ttk.Frame(main_frame)
-        action_frame.grid(row=16, column=0, columnspan=2, sticky="e")
+        action_frame.grid(row=18, column=0, columnspan=2, sticky="e")
 
         self.start_button = ttk.Button(action_frame, text="Run translation", command=self._on_start)
         self.start_button.grid(row=0, column=0, padx=(0, 10))
@@ -290,6 +297,7 @@ class WormholeGUI:
         source_language = self.source_language_var.get().strip() or None
         provider = self.provider_var.get().strip() or None
         model = self.model_var.get().strip() or None
+        custom_instructions = self.instructions_text.get("1.0", tk.END).strip() or None
 
         self.translation_in_progress = True
         self.status_var.set("Running translation — please wait.")
@@ -307,6 +315,7 @@ class WormholeGUI:
             "non_interactive": self.non_interactive_var.get(),
             "verbose": self.verbose_flag,
             "provider_debug": self.provider_debug,
+            "custom_instructions": custom_instructions,
         }
 
         threading.Thread(

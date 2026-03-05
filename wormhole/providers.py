@@ -26,6 +26,7 @@ class TranslationProvider(ABC):
         source_language: str | None,
         target_language: str,
         model: str | None = None,
+        custom_instructions: str | None = None,
     ) -> Dict[str, str]:
         """Translate the provided segments and return a mapping by segment id."""
 
@@ -40,6 +41,7 @@ class EchoTranslationProvider(TranslationProvider):
         source_language: str | None,
         target_language: str,
         model: str | None = None,
+        custom_instructions: str | None = None,
     ) -> Dict[str, str]:
         return {segment.segment_id: segment.text for segment in segments}
 
@@ -128,6 +130,7 @@ class OpenAITranslationProvider(TranslationProvider):
         source_language: str | None,
         target_language: str,
         model: str | None = None,
+        custom_instructions: str | None = None,
     ) -> Dict[str, str]:
         if not segments:
             return {}
@@ -148,6 +151,8 @@ class OpenAITranslationProvider(TranslationProvider):
             "preserving tag order. "
             "Do not add commentary. Do not wrap the JSON in markdown code fences."
         )
+        if custom_instructions:
+            system_prompt += f"\n\nAdditional instructions:\n{custom_instructions}"
         user_prompt = {
             "target_language": target_language,
             "source_language": source_language,
