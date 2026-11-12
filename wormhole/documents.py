@@ -206,7 +206,7 @@ class DocxDocumentHandler(BaseDocumentHandler):
         for t_idx, table in enumerate(self.document.tables):
             for r_idx, row in enumerate(table.rows):
                 for c_idx, cell in enumerate(row.cells):
-                    cell_key = id(cell._tc)  # type: ignore[attr-defined]
+                    cell_key = cell._tc  # type: ignore[attr-defined]  # keep the element itself: id() of a transient lxml proxy gets reused
                     if cell_key in processed_cells:
                         continue
                     processed_cells.add(cell_key)
@@ -244,7 +244,7 @@ class DocxDocumentHandler(BaseDocumentHandler):
                 for t_idx, table in enumerate(container.tables):
                     for r_idx, row in enumerate(table.rows):
                         for c_idx, cell in enumerate(row.cells):
-                            cell_key = id(cell._tc)  # type: ignore[attr-defined]
+                            cell_key = cell._tc  # type: ignore[attr-defined]  # keep the element itself: id() of a transient lxml proxy gets reused
                             if cell_key in processed_cells:
                                 continue
                             processed_cells.add(cell_key)
