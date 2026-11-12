@@ -55,7 +55,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-p",
         "--provider",
-        help="Translation provider identifier (default: openai).",
+        help=(
+            "Translation provider: openai (default), legacy-openai, or a "
+            "subscription-backed agent CLI: claude-code, codex, copilot."
+        ),
     )
     parser.add_argument(
         "-m",

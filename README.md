@@ -26,7 +26,7 @@ The CLI is designed for teams that want a provider-agnostic workflow: switching 
 ## Requirements
 
 - Python 3.13 (managed through [uv](https://github.com/astral-sh/uv)).
-- An OpenAI API key (`OPENAI_API_KEY`) when using the default provider.
+- An OpenAI API key (`OPENAI_API_KEY`) when using the default provider, **or** no API key at all when translating through a signed-in Claude Code, Codex or GitHub Copilot CLI (see [Using a subscription instead of an API key](#using-a-subscription-instead-of-an-api-key)).
 - Optional `.env` file in the project root for environment configuration (`OPENAI_API_KEY`, `WORMHOLE_PROVIDER_DEBUG`, etc.).
 
 ## Installation (uv only)
@@ -217,6 +217,39 @@ Or paste it directly into the **Custom instructions** field in the GUI before ru
 ## Working with Providers
 
 The default OpenAI provider reads `OPENAI_API_KEY` from the environment. The adapter can be extended to support alternate providers while keeping the existing CLI contract intact. Provider debugging can be enabled via the `--debug-provider` flag or either `WORMHOLE_PROVIDER_DEBUG=1` or `WORMHOLE_DEBUG_PROVIDER=1` in the environment.
+
+### Using a subscription instead of an API key
+
+If you already pay for Claude, ChatGPT or GitHub Copilot, Wormhole can translate through the matching agent CLI. The CLI uses the login you already performed, so no API key is needed and usage counts against your subscription.
+
+| Provider (`-p`) | CLI required | Sign in once with | Subscription used |
+| --- | --- | --- | --- |
+| `claude-code` (alias `claude`) | [Claude Code](https://claude.com/claude-code) (`claude`) | `claude`, then `/login` | Claude Pro / Max / Team |
+| `codex` (alias `chatgpt`) | [Codex CLI](https://developers.openai.com/codex/cli) (`codex`) | `codex login` | ChatGPT Plus / Pro / Business |
+| `copilot` (alias `github-copilot`) | [GitHub Copilot CLI](https://github.com/features/copilot/cli) (`copilot`) | `copilot login` | GitHub Copilot |
+
+```bash
+uv run python -m wormhole.cli input.docx -t es -p claude-code
+uv run python -m wormhole.cli input.pptx -t fr -p codex
+uv run python -m wormhole.cli input.xlsx -t de -p copilot -m claude-haiku-4.5
+```
+
+To make one of them the default (also for the GUI), set `LLM_PROVIDER=claude-code`, `codex` or `copilot` in `.env`.
+
+How it works and what to expect:
+
+- Each batch is one stateless, non-interactive CLI run (`claude -p`, `codex exec`, `copilot` prompt mode) in an empty temporary directory, with tools disabled or denied. Nothing from your projects is read and no session is saved.
+- Wormhole removes `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` (Claude Code) and `OPENAI_API_KEY` / `CODEX_API_KEY` (Codex) from the CLI's environment, because the CLIs would otherwise bill that API key instead of your subscription. An `OPENAI_API_KEY` in `.env` is therefore safe to keep.
+- Starting a CLI costs a few seconds per batch. For large documents raise the batch size, e.g. `-b 8000`, to make fewer calls.
+- `-m/--model` is passed to the CLI as-is (for example `sonnet`, `gpt-5.2`, `claude-haiku-4.5`); without it the CLI's own default model is used.
+
+Optional environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `WORMHOLE_CLAUDE_MODEL`, `WORMHOLE_CODEX_MODEL`, `WORMHOLE_COPILOT_MODEL` | Default model for that provider when `--model` is not given. |
+| `WORMHOLE_CLAUDE_BIN`, `WORMHOLE_CODEX_BIN`, `WORMHOLE_COPILOT_BIN` | Full path to the CLI when it is not on `PATH` (common when launching the GUI from a desktop shortcut). |
+| `WORMHOLE_AGENT_TIMEOUT` | Seconds to wait for one batch (default `300`). |
 
 ### OpenAI Responses vs Legacy Completions
 

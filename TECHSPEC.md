@@ -91,6 +91,7 @@ graph LR
 - **OpenAI Implementation**: Supports both:
   - Standard OpenAI API (Responses mode)
   - Azure OpenAI (via `LLM_PROVIDER=azure_openai`)
+- **Agent CLI Implementations** (`agent_providers.py`): `claude-code`, `codex` and `copilot` run the locally installed, signed-in CLI as a subprocess per batch, so the user's subscription is used and no API key is required. They share prompt building and JSON parsing with the OpenAI provider through `JsonPromptTranslationProvider`.
 - **Provider Selection**: Via `LLM_PROVIDER` env var or `--provider` flag
 - **Model Selection**: Via `--model` flag or provider defaults
 
@@ -298,6 +299,7 @@ wormhole/
 ├── documents.py         # Document handlers (.docx, .pptx, .xlsx)
 ├── segmenter.py         # Text segmentation & batching
 ├── providers.py         # Translation provider implementations
+├── agent_providers.py   # Subscription-backed providers (Claude Code, Codex, Copilot CLIs)
 ├── interaction.py       # I/O abstraction (TranslationIO protocol)
 ├── errors.py            # Error definitions & ErrorTracker
 ├── policy.py            # Error policy thresholds
@@ -310,7 +312,7 @@ wormhole/
 **Environment Variables**:
 ```bash
 # Translation provider
-LLM_PROVIDER=openai              # or azure_openai
+LLM_PROVIDER=openai              # or azure_openai, claude-code, codex, copilot
 OPENAI_API_KEY=sk-...            # Required for openai
 
 # Azure OpenAI (if LLM_PROVIDER=azure_openai)

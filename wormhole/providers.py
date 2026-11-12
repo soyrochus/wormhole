@@ -46,7 +46,144 @@ class EchoTranslationProvider(TranslationProvider):
         return {segment.segment_id: segment.text for segment in segments}
 
 
-class OpenAITranslationProvider(TranslationProvider):
+class JsonPromptTranslationProvider(TranslationProvider):
+    """Shared prompt construction and JSON response parsing for LLM backends."""
+
+    debug: bool = False
+    _default_model: str | None = None
+
+    def translate(
+        self,
+        segments: Sequence[TextSegment],
+        *,
+        source_language: str | None,
+        target_language: str,
+        model: str | None = None,
+        custom_instructions: str | None = None,
+    ) -> Dict[str, str]:
+        if not segments:
+            return {}
+
+        payload = [
+            {"id": segment.segment_id, "text": segment.text}
+            for segment in segments
+        ]
+        system_prompt = (
+            "You are a professional translator. Return only JSON. "
+            "Translate the provided text segments into the requested language. "
+            "Preserve formatting, placeholders, numbers, and markup. "
+            "Respond strictly with an object shaped as "
+            '{"translations": [{"id": "...", "translated": "..."}]}. '
+            "Input may include tags such as <run id=\"…\">…</run>; keep tags and their "
+            "attributes exactly as provided, translate only the inner text, and you may "
+            "redistribute translated words across sequential runs as needed while "
+            "preserving tag order. "
+            "Do not add commentary. Do not wrap the JSON in markdown code fences."
+        )
+        if custom_instructions:
+            system_prompt += f"\n\nAdditional instructions:\n{custom_instructions}"
+        user_prompt = {
+            "target_language": target_language,
+            "source_language": source_language,
+            "segments": payload,
+        }
+        self._log_debug("provider.request.system_prompt", system_prompt)
+        self._log_debug("provider.request.payload", user_prompt)
+
+        response_items = self._invoke_model(
+            system_prompt=system_prompt,
+            user_payload=user_prompt,
+            model=model or self._default_model,
+        )
+        self._log_debug("provider.response.items", response_items)
+
+        mapping: Dict[str, str] = {}
+        for item in response_items:
+            if not isinstance(item, dict):
+                raise TranslationProviderError(
+                    "Translation provider response malformed: expected objects."
+                )
+            segment_id = item.get("id")
+            translated = item.get("translated")
+            if not isinstance(segment_id, str) or not isinstance(translated, str):
+                raise TranslationProviderError(
+                    "Translation provider response malformed: missing fields."
+                )
+            mapping[segment_id] = translated
+
+        self._log_debug("provider.response.mapping", mapping)
+        return mapping
+
+    @abstractmethod
+    def _invoke_model(
+        self,
+        *,
+        system_prompt: str,
+        user_payload: dict,
+        model: str | None,
+    ) -> list[dict[str, Any]]:
+        """Send the prompt to the backend and return the translations list."""
+
+    def _log_debug(self, label: str, payload: Any) -> None:
+        """Emit structured debug information when enabled."""
+
+        if not getattr(self, "debug", False):
+            return
+        try:
+            if isinstance(payload, (dict, list)):
+                message = json.dumps(payload, ensure_ascii=False, indent=2)
+            else:
+                message = str(payload)
+        except Exception:
+            message = repr(payload)
+        print(f"[wormhole][provider-debug] {label}:\n{message}", file=sys.stderr)
+
+    def _strip_code_fence(self, text: str) -> str:
+        """Remove leading/trailing markdown code fences if present."""
+
+        stripped = text.strip()
+        if not stripped.startswith("```"):
+            return stripped
+
+        # Drop opening fence and optional language hint.
+        first_newline = stripped.find("\n")
+        if first_newline == -1:
+            return stripped
+        body = stripped[first_newline + 1 :]
+        closing_index = body.rfind("```")
+        if closing_index != -1:
+            body = body[:closing_index]
+        return body.strip()
+
+    def _normalise_translations(self, payload: Any) -> list[dict[str, Any]]:
+        """Normalise raw payloads into a list of translation dictionaries."""
+
+        if hasattr(payload, "value"):
+            payload = payload.value
+
+        if isinstance(payload, str):
+            payload = self._strip_code_fence(payload)
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError as exc:
+                raise TranslationProviderError(
+                    f"Translation provider returned invalid JSON: {exc}"
+                ) from exc
+
+        if isinstance(payload, dict):
+            translations = payload.get("translations")
+            if isinstance(translations, list):
+                return translations
+
+        if isinstance(payload, list):
+            return payload
+
+        raise TranslationProviderError(
+            "Translation provider response malformed: could not find translations list."
+        )
+
+
+class OpenAITranslationProvider(JsonPromptTranslationProvider):
     """Translation provider that uses OpenAI chat models."""
 
     DEFAULT_MODEL = "gpt-5.2"  # "gpt-4o-mini"
@@ -123,68 +260,6 @@ class OpenAITranslationProvider(TranslationProvider):
         )
         return client, deployment_name  # type: ignore[arg-type]
 
-    def translate(
-        self,
-        segments: Sequence[TextSegment],
-        *,
-        source_language: str | None,
-        target_language: str,
-        model: str | None = None,
-        custom_instructions: str | None = None,
-    ) -> Dict[str, str]:
-        if not segments:
-            return {}
-
-        payload = [
-            {"id": segment.segment_id, "text": segment.text}
-            for segment in segments
-        ]
-        system_prompt = (
-            "You are a professional translator. Return only JSON. "
-            "Translate the provided text segments into the requested language. "
-            "Preserve formatting, placeholders, numbers, and markup. "
-            "Respond strictly with an object shaped as "
-            '{"translations": [{"id": "...", "translated": "..."}]}. '
-            "Input may include tags such as <run id=\"…\">…</run>; keep tags and their "
-            "attributes exactly as provided, translate only the inner text, and you may "
-            "redistribute translated words across sequential runs as needed while "
-            "preserving tag order. "
-            "Do not add commentary. Do not wrap the JSON in markdown code fences."
-        )
-        if custom_instructions:
-            system_prompt += f"\n\nAdditional instructions:\n{custom_instructions}"
-        user_prompt = {
-            "target_language": target_language,
-            "source_language": source_language,
-            "segments": payload,
-        }
-        self._log_debug("provider.request.system_prompt", system_prompt)
-        self._log_debug("provider.request.payload", user_prompt)
-
-        response_items = self._invoke_model(
-            system_prompt=system_prompt,
-            user_payload=user_prompt,
-            model=model or self._default_model,
-        )
-        self._log_debug("provider.response.items", response_items)
-
-        mapping: Dict[str, str] = {}
-        for item in response_items:
-            if not isinstance(item, dict):
-                raise TranslationProviderError(
-                    "Translation provider response malformed: expected objects."
-                )
-            segment_id = item.get("id")
-            translated = item.get("translated")
-            if not isinstance(segment_id, str) or not isinstance(translated, str):
-                raise TranslationProviderError(
-                    "Translation provider response malformed: missing fields."
-                )
-            mapping[segment_id] = translated
-
-        self._log_debug("provider.response.mapping", mapping)
-        return mapping
-
     def _invoke_model(
         self,
         *,
@@ -222,20 +297,6 @@ class OpenAITranslationProvider(TranslationProvider):
         self._log_debug("provider.response.raw", self._safe_dump_response(response))
         return self._extract_translations(response)
 
-    def _log_debug(self, label: str, payload: Any) -> None:
-        """Emit structured debug information when enabled."""
-
-        if not getattr(self, "debug", False):
-            return
-        try:
-            if isinstance(payload, (dict, list)):
-                message = json.dumps(payload, ensure_ascii=False, indent=2)
-            else:
-                message = str(payload)
-        except Exception:
-            message = repr(payload)
-        print(f"[wormhole][provider-debug] {label}:\n{message}", file=sys.stderr)
-
     def _safe_dump_response(self, response: Any) -> Any:
         """Best-effort conversion of Responses API objects into JSON-friendly data."""
 
@@ -255,23 +316,6 @@ class OpenAITranslationProvider(TranslationProvider):
             except Exception:
                 pass
         return str(response)
-
-    def _strip_code_fence(self, text: str) -> str:
-        """Remove leading/trailing markdown code fences if present."""
-
-        stripped = text.strip()
-        if not stripped.startswith("```"):
-            return stripped
-
-        # Drop opening fence and optional language hint.
-        first_newline = stripped.find("\n")
-        if first_newline == -1:
-            return stripped
-        body = stripped[first_newline + 1 :]
-        closing_index = body.rfind("```")
-        if closing_index != -1:
-            body = body[:closing_index]
-        return body.strip()
 
     def _extract_translations(self, response: Any) -> list[dict[str, Any]]:
         """Extract the structured translation list from a Responses API result."""
@@ -315,32 +359,6 @@ class OpenAITranslationProvider(TranslationProvider):
             "Translation provider response empty or unrecognised."
         )
 
-    def _normalise_translations(self, payload: Any) -> list[dict[str, Any]]:
-        """Normalise raw payloads into a list of translation dictionaries."""
-
-        if hasattr(payload, "value"):
-            payload = payload.value
-
-        if isinstance(payload, str):
-            payload = self._strip_code_fence(payload)
-            try:
-                payload = json.loads(payload)
-            except json.JSONDecodeError as exc:
-                raise TranslationProviderError(
-                    f"Translation provider returned invalid JSON: {exc}"
-                ) from exc
-
-        if isinstance(payload, dict):
-            translations = payload.get("translations")
-            if isinstance(translations, list):
-                return translations
-
-        if isinstance(payload, list):
-            return payload
-
-        raise TranslationProviderError(
-            "Translation provider response malformed: could not find translations list."
-        )
 
 
 class LegacyOpenAITranslationProvider(OpenAITranslationProvider):
@@ -416,7 +434,15 @@ class LegacyOpenAITranslationProvider(OpenAITranslationProvider):
 def build_provider(name: str | None, *, debug: bool = False) -> TranslationProvider:
     """Factory to create providers by name."""
 
-    normalized = (name or "openai").strip().lower()
+    from .agent_providers import AGENT_PROVIDERS
+
+    normalized = (name or "").strip().lower()
+    if not normalized:
+        # LLM_PROVIDER may select a subscription-backed agent CLI as the default.
+        configured = (os.getenv("LLM_PROVIDER") or "").strip().lower()
+        normalized = configured if configured in AGENT_PROVIDERS else "openai"
+    if normalized in AGENT_PROVIDERS:
+        return AGENT_PROVIDERS[normalized](debug=debug)
     if normalized in {"openai", "gpt", "default"}:
         return OpenAITranslationProvider(debug=debug)
     if normalized in {"legacy-openai", "legacy_openai", "legacy", "openai-legacy"}:

@@ -163,8 +163,10 @@ class TranslationRunner:
             total_segments=total_segments,
             total_batches=len(batches),
             total_errors=len(self.error_policy.records),
-            provider_name=self.provider_name or "openai",
-            model=self.model,
+            provider_name=getattr(provider, "name", None)
+            or self.provider_name
+            or "openai",
+            model=self.model or getattr(provider, "_default_model", None),
             target_language=self.target_language,
             source_language=self.source_language,
             elapsed_seconds=elapsed,
