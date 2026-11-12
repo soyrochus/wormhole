@@ -82,6 +82,8 @@ class TranslationRunner:
         start_time = time.time()
 
         document_type, handler = detect_handler(self.input_path)
+        for warning in handler.warnings:
+            self.io.error(warning)
         units = handler.extract_text_units()
 
         segmenter = Segmenter(self.batch_budget)
@@ -266,7 +268,7 @@ def validate_paths(
 
     if not input_path.exists():
         raise FileNotFoundError(
-            "Input file not found. Please provide a readable .docx or .pptx file."
+            "Input file not found. Please provide a readable .docx, .pptx or .xlsx file."
         )
     if not input_path.is_file():
         raise WormholeError("Input path must be a file.")

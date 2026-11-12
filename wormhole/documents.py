@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import pathlib
 import re
+import zipfile
 from abc import ABC, abstractmethod
 from typing import Dict, Iterable, List, Sequence, Tuple
 
@@ -146,12 +147,25 @@ def _import_pptx():
     return Presentation
 
 
+def _import_openpyxl():
+    try:
+        from openpyxl import load_workbook  # type: ignore
+    except ImportError as exc:  # pragma: no cover - import guard
+        raise WormholeError(
+            "openpyxl is required to process .xlsx files. "
+            "Install the optional dependency with `pip install openpyxl`."
+        ) from exc
+    return load_workbook
+
+
 class BaseDocumentHandler(ABC):
     """Common base class for document handlers."""
 
     def __init__(self, source_path: pathlib.Path):
         self.source_path = source_path
         self.units: List[TextUnit] = []
+        # Messages the user must see before relying on the output.
+        self.warnings: List[str] = []
 
     @abstractmethod
     def extract_text_units(self) -> List[TextUnit]:
@@ -404,6 +418,101 @@ class PptxDocumentHandler(BaseDocumentHandler):
         return units
 
 
+class XlsxDocumentHandler(BaseDocumentHandler):
+    """Extracts and reinserts text for Excel workbooks."""
+
+    # Package part prefixes openpyxl may not write back, with the user warning.
+    _UNSUPPORTED_PARTS: Tuple[Tuple[Tuple[str, ...], str], ...] = (
+        (
+            ("xl/charts/",),
+            "This workbook contains charts. "
+            "They may be missing from the translated file.",
+        ),
+        (
+            ("xl/drawings/", "xl/media/"),
+            "This workbook contains images, shapes or text boxes. "
+            "They may be missing from the translated file.",
+        ),
+        (
+            ("xl/pivotTables/",),
+            "This workbook contains pivot tables. "
+            "Check them in the translated file.",
+        ),
+    )
+
+    def __init__(self, source_path: pathlib.Path):
+        super().__init__(source_path)
+        load_workbook = _import_openpyxl()
+        # data_only stays False: with True, formulas would be lost on save.
+        self.workbook = load_workbook(str(source_path))
+        self.warnings = self._detect_unsupported_content(source_path)
+
+    def extract_text_units(self) -> List[TextUnit]:
+        # One unit per distinct string; dict preserves first-seen order.
+        groups: Dict[str, Tuple[int, List[object]]] = {}
+        for s_idx, sheet in enumerate(self.workbook.worksheets):
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if not self._is_translatable(cell):
+                        continue
+                    groups.setdefault(cell.value, (s_idx, []))[1].append(cell)
+
+        units: List[TextUnit] = []
+        for text, (s_idx, cells) in groups.items():
+            first = cells[0]
+            location = f'Sheet "{first.parent.title}", cell {first.coordinate}'
+            if len(cells) > 1:
+                extra = len(cells) - 1
+                location += f" (and {extra} more cell{'s' if extra != 1 else ''})"
+            units.append(
+                TextUnit(
+                    unit_id=f"sheet{s_idx}.{first.coordinate}",
+                    original_text=text,
+                    setter=self._make_setter(cells),
+                    location=location,
+                    atomic=False,
+                )
+            )
+        return self.register_units(units)
+
+    def save(self, destination: pathlib.Path) -> None:
+        self.workbook.save(str(destination))
+
+    # --- Internal helpers -------------------------------------------------
+
+    @staticmethod
+    def _is_translatable(cell) -> bool:
+        if getattr(cell, "data_type", None) != "s":
+            return False
+        value = cell.value
+        if not isinstance(value, str) or not value.strip():
+            return False
+        return any(ch.isalpha() for ch in value)
+
+    @staticmethod
+    def _make_setter(cells: List[object]):
+        def _setter(translated: str) -> None:
+            for cell in cells:
+                cell.value = translated  # type: ignore[attr-defined]
+                # A translation starting with "=" must stay text, not become a formula.
+                cell.data_type = "s"  # type: ignore[attr-defined]
+
+        return _setter
+
+    @classmethod
+    def _detect_unsupported_content(cls, source_path: pathlib.Path) -> List[str]:
+        try:
+            with zipfile.ZipFile(str(source_path)) as package:
+                names = package.namelist()
+        except (OSError, zipfile.BadZipFile):
+            return []
+        return [
+            message
+            for prefixes, message in cls._UNSUPPORTED_PARTS
+            if any(name.startswith(prefixes) for name in names)
+        ]
+
+
 def detect_handler(path: pathlib.Path) -> Tuple[str, BaseDocumentHandler]:
     """Select an appropriate handler for the provided file."""
 
@@ -414,6 +523,9 @@ def detect_handler(path: pathlib.Path) -> Tuple[str, BaseDocumentHandler]:
     if suffix == ".pptx":
         handler = PptxDocumentHandler(path)
         return "pptx", handler
+    if suffix == ".xlsx":
+        handler = XlsxDocumentHandler(path)
+        return "xlsx", handler
     raise UnsupportedFileTypeError(
-        "This file type isn’t supported — please use .docx or .pptx."
+        "This file type isn’t supported — please use .docx, .pptx or .xlsx."
     )

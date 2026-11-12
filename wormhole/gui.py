@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pathlib
 import threading
 from typing import Any, Optional, Protocol, Sequence
 
@@ -147,7 +148,7 @@ class WormholeGUI:
         self.root.rowconfigure(0, weight=1)
 
         # Input file
-        ttk.Label(main_frame, text="Input file (.docx or .pptx)").grid(
+        ttk.Label(main_frame, text="Input file (.docx, .pptx or .xlsx)").grid(
             row=0, column=0, sticky="w"
         )
         input_entry = ttk.Entry(main_frame, textvariable=self.input_path_var, width=45)
@@ -241,6 +242,7 @@ class WormholeGUI:
             filetypes=[
                 ("Word documents", "*.docx"),
                 ("PowerPoint presentations", "*.pptx"),
+                ("Excel workbooks", "*.xlsx"),
                 ("All files", "*.*"),
             ],
         )
@@ -250,14 +252,18 @@ class WormholeGUI:
     def _choose_output(self) -> None:
         """Prompt the user to select an output path."""
 
+        input_suffix = pathlib.Path(self.input_path_var.get().strip()).suffix.lower()
+        if input_suffix not in {".docx", ".pptx", ".xlsx"}:
+            input_suffix = ".docx"
         selection = filedialog.asksaveasfilename(
             title="Save translated document as",
             filetypes=[
                 ("Word documents", "*.docx"),
                 ("PowerPoint presentations", "*.pptx"),
+                ("Excel workbooks", "*.xlsx"),
                 ("All files", "*.*"),
             ],
-            defaultextension=".docx",
+            defaultextension=input_suffix,
         )
         if selection:
             self.output_path_var.set(selection)
@@ -276,7 +282,7 @@ class WormholeGUI:
         input_path = self.input_path_var.get().strip()
         target_language = self.target_language_var.get().strip()
         if not input_path:
-            messagebox.showerror("Wormhole", "Please choose an input .docx or .pptx file.")
+            messagebox.showerror("Wormhole", "Please choose an input .docx, .pptx or .xlsx file.")
             return
         if not target_language:
             messagebox.showerror("Wormhole", "Please provide a target language.")

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Wormhole is a document translator that preserves layout and structure while translating content in Word (.docx) and PowerPoint (.pptx) files. It supports both CLI and GUI interfaces, using pluggable translation providers (OpenAI, Azure OpenAI) with batch processing for efficiency.
+Wormhole is a document translator that preserves layout and structure while translating content in Word (.docx), PowerPoint (.pptx) and Excel (.xlsx) files. It supports both CLI and GUI interfaces, using pluggable translation providers (OpenAI, Azure OpenAI) with batch processing for efficiency.
 
 ## Architecture
 
@@ -45,8 +45,10 @@ graph TB
 ## Core Components
 
 ### 1. Document Layer (`documents.py`)
-- **Supported Formats**: .docx (Word), .pptx (PowerPoint)
+- **Supported Formats**: .docx (Word), .pptx (PowerPoint), .xlsx (Excel)
+- **Handlers**: `DocxDocumentHandler`, `PptxDocumentHandler`, `XlsxDocumentHandler`
 - **Handler Detection**: Auto-detects format and selects appropriate handler
+- **Excel specifics**: only string cells containing letters are translated; one text unit per distinct string across the workbook (its setter writes every matching cell); handler `warnings` flag charts, drawings and pivot tables that `openpyxl` may not round-trip and are printed by `TranslationRunner.run()`
 - **Operations**:
   - Extract text units while preserving structure (tables, headers, footers, text boxes)
   - Assign stable IDs to each text unit
@@ -293,7 +295,7 @@ wormhole/
 ├── cli.py               # CLI interface & execute_translation()
 ├── gui.py               # Tkinter GUI & launch_gui()
 ├── translator.py        # TranslationRunner orchestrator
-├── documents.py         # Document handlers (.docx, .pptx)
+├── documents.py         # Document handlers (.docx, .pptx, .xlsx)
 ├── segmenter.py         # Text segmentation & batching
 ├── providers.py         # Translation provider implementations
 ├── interaction.py       # I/O abstraction (TranslationIO protocol)
@@ -350,7 +352,7 @@ After translation completes, a `TranslationSummary` is returned:
 class TranslationSummary:
     input_path: pathlib.Path
     output_path: pathlib.Path
-    document_type: str              # "docx" or "pptx"
+    document_type: str              # "docx", "pptx" or "xlsx"
     source_language: str | None
     target_language: str
     provider_name: str

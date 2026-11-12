@@ -1,7 +1,7 @@
 # SPEC-2026-11-12-01 — Excel (.xlsx) Support
 
 **Date:** 2026-11-12
-**Status:** Proposed
+**Status:** Implemented
 **Scope:** `documents.py` (new handler), `translator.py`, CLI, GUI, dependencies, packaging, docs
 
 ---

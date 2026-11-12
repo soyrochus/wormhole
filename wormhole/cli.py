@@ -27,13 +27,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="wormhole",
         description=(
-            "Translate Word (.docx) and PowerPoint (.pptx) documents while preserving layout."
+            "Translate Word (.docx), PowerPoint (.pptx) and Excel (.xlsx) documents "
+            "while preserving layout."
         ),
     )
     parser.add_argument(
         "input_file",
         nargs="?",
-        help="Path to the .docx or .pptx file to translate.",
+        help="Path to the .docx, .pptx or .xlsx file to translate.",
     )
     parser.add_argument(
         "-t",

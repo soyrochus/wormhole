@@ -9,13 +9,14 @@
 
 ![Wormhole icon](images/wormhole-min.png)
 
-Wormhole is a command-line translator that rewrites Word (`.docx`) and PowerPoint (`.pptx`) files into another language while keeping the original layout intact. The tool walks every paragraph, table cell, header, footer, text box, and note, collects their text with deterministic identifiers, batches the content for an LLM, reinserts the translated text in place, and finally saves the result as a new document plus a friendly completion report.
+Wormhole is a command-line translator that rewrites Word (`.docx`), PowerPoint (`.pptx`) and Excel (`.xlsx`) files into another language while keeping the original layout intact. The tool walks every paragraph, table cell, header, footer, text box, note, and worksheet cell, collects their text with deterministic identifiers, batches the content for an LLM, reinserts the translated text in place, and finally saves the result as a new document plus a friendly completion report.
 
 The CLI is designed for teams that want a provider-agnostic workflow: switching to a different LLM requires only a new adapter, not a new command-line contract.
 
 ## Key Features
 
 - Full support for `.docx` and `.pptx` sources (body, tables, headers/footers, notes).
+- Support for `.xlsx` workbooks: text cells on every worksheet, with repeated values translated once and consistently (see [Known limitations for Excel](#known-limitations-for-excel)).
 - Deterministic IDs for every text unit to guarantee stable reinsertion.
 - Layout-preserving reinsertion, even across runs with custom formatting.
 - Batch planner that respects sentence boundaries with a default 2,000 character budget.
@@ -76,6 +77,9 @@ uv run python -m wormhole.cli \
   --source-language es \
   --output devloop_en.pptx \
   --verbose
+
+# Translate an Excel workbook (writes response-matrix_en.xlsx)
+uv run python -m wormhole.cli response-matrix.xlsx --target-language en
 ```
 
 Alternatively, the project exposes a convenience entry point via `main.py`:
@@ -89,6 +93,24 @@ During execution Wormhole prints progress (and, optionally, provider debug outpu
 Prefer a visual workflow? Launch the Tkinter GUI with `./wormhole.sh --gui` on MacOS and Linux or `./wormhole.ps1 --gui` on Windows; the window maps all core CLI options and still streams debug/verbose logs to the terminal.
 
 ![WOrmhole Screen shot](./images/wormhole-gui.png)
+
+## Known limitations for Excel
+
+Wormhole translates the text in worksheet cells of `.xlsx` workbooks, on every sheet (hidden sheets included). Numbers, dates, booleans, formulas and cell formatting are left as they are. Each distinct cell text is translated once and written to every cell that holds it, so labels stay consistent across a column.
+
+Not translated:
+
+- Sheet names (formulas reference them by name).
+- Formula cells, including string literals inside formulas.
+- Cell comments / notes, data-validation dropdown lists, headers / footers, defined names, chart titles, text boxes and shapes.
+- Text-typed cells without any letters, such as `2024-01` or `1.2.3`.
+- `.xlsm`, `.xls`, `.xlsb` and `.csv` files are rejected as unsupported.
+
+Things to check in the translated workbook:
+
+- **Formulas that depend on translated text.** A formula such as `=IF(A1="Sí", …)` or a `VLOOKUP` keyed on a text label stops matching once the label is translated. Wormhole does not detect this.
+- **Mixed formatting inside a cell.** A cell with, for example, one bold word is translated as plain text; the whole cell then carries the cell-level format.
+- **Charts, images, shapes, text boxes and pivot tables.** The workbook is rewritten by `openpyxl`, which only writes back what it models. Shapes and text boxes are dropped; charts and images are usually kept but may be altered; pivot tables and some conditional-formatting or extension features should be verified. Wormhole prints a warning when the source workbook contains any of these.
 
 ## Architecture & Technical Details
 
@@ -126,7 +148,7 @@ UV_ARGS="--python 3.11" ./wormhole.sh --version
 
 | Option | Description | Notes |
 | ------ | ----------- | ----- |
-| `input_file` | Path to the `.docx` or `.pptx` file to translate. | Required positional argument. |
+| `input_file` | Path to the `.docx`, `.pptx` or `.xlsx` file to translate. | Required positional argument. |
 | `-t, --target-language` | Destination language (ISO-639 code or full name). | Required. |
 | `-s, --source-language` | Optional source language hint. | Helps segmentation and provider prompts. |
 | `-o, --output` | Output file path. | Defaults to appending the target language to the input stem; the input file is never overwritten. |
